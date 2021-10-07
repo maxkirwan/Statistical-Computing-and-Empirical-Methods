@@ -1,0 +1,226 @@
+---
+title: "SCEM Assignment 2"
+author: "Max Kirwan"
+date: "06/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Visualisation
+
+```{r}
+library(tidyverse)
+library(Stat2Data)
+data("Hawks")
+hawksSmall<-drop_na(select(Hawks,Age,Day,Month,Year,CaptureTime,Species,Wing,Weight,Tail))
+```
+
+#### 1.1 Types of Variables
+
+```{r}
+dim(hawksSmall)
+head(hawksSmall)
+```
+
+1. Month - Discrete
+2. Species - Categorical
+3. Age - Categorical
+4. Wing - Continuous
+5. Weight - Continuous
+
+#### 1.2 What's wrong with this plot?
+
+- No axis labels.
+- No title.
+- Too many visual cues... position, size and colour.
+
+#### 1.3 Generate a histogram
+
+```{r}
+ggplot(hawksSmall, aes(x=Weight)) + geom_histogram(binwidth=100) + xlab("Weight (g)") + ylab("Count")
+```
+
+The weights have a bimodal distribution with 2 distinct means, probably due to the distinct species of Hawk.
+
+#### 1.4 Generate a density plot
+
+```{r}
+ggplot(hawksSmall, aes(x=Tail)) + geom_density() + xlab("Tail (mm)") + ylab("Density")
+```
+```{r}
+ggplot(hawksSmall, aes(x=Tail)) + geom_density(adjust=0.5) + xlab("Tail (mm)") + ylab("Density")
+```
+```{r}
+ggplot(hawksSmall, aes(x=Tail, colour=Species)) + geom_density() + xlab("Tail (mm)") + ylab("Density")
+```
+```{r}
+ggplot(hawksSmall, aes(x=Tail, y=Species, colour=Species, fill=Species)) + geom_violin() + xlab("Tail (mm)") + ylab("Species")
+```
+
+#### 1.5 Scatter plots
+
+There are 4 aesthetics present:
+
+- Position to Tail
+- Position to Weight
+- Colour to Species
+- Shape to Species
+
+There are 3 glyphs present:
+
+- Red circles
+- Green triangles
+- Blue squares
+
+```{r}
+ggplot(hawksSmall, aes(x=Tail, y=Weight, colour=Species, shape=Species)) + geom_point() + xlab("Tail (mm)") + ylab("Weight (g)")
+```
+
+#### 1.6 Trend lines and facet wraps
+
+```{r}
+ggplot(hawksSmall, aes(x=Tail, y=Weight, colour=Species)) + geom_point() + geom_smooth(method="lm") + facet_wrap(vars(Species)) + xlab("Tail (mm)") + ylab("Weight (g)")
+```
+
+The visual cues used in this plot are position, colour, angle and direction.
+In all 3 species of hawk there is a positive correlation between weight and tail length.
+
+## 2. Data Wrangling
+
+#### 2.1 Select and filter functions
+
+```{r}
+hSF <- Hawks %>%
+  filter(Species=="RT", Weight>=1000) %>%
+  select(Wing, Weight, Tail)
+head(hSF)
+```
+
+The dataframe hSF has 3 variables; Wing, Weight and Tail and 398 examples/observations/cases.
+
+#### 2.2 The arrange function
+
+```{r}
+head(arrange(hSF, Wing))
+```
+
+#### 2.2 Join and rename functions
+
+```{r}
+species_code <- c("CH","RT", "SS")
+species_name_full <- c("Cooper's", "Red-tailed", "Sharp-shinned")
+species_names <- data.frame(species_code, species_name_full)
+species_names
+```
+```{r}
+hawksFullName <- Hawks %>%
+  left_join(species_names, by=c("Species"="species_code")) %>%
+  select(-Species) %>%
+  rename(Species = species_name_full)
+head(select(hawksFullName, Species, Wing, Weight))
+```
+
+#### 2.4 The mutate function
+
+```{r}
+hawksWithBMI <- Hawks %>%
+  mutate(bird_BMI = 1000*Weight/Wing^2) %>%
+  filter(bird_BMI<=100) %>%
+  select(Species, bird_BMI) %>%
+  arrange(desc(bird_BMI))
+head(hawksWithBMI)
+```
+```{r}
+ggplot(hawksWithBMI, aes(x=bird_BMI, y=Species, colour=Species, fill=Species)) + geom_violin() + xlab("Bird BMI") + ylab("Species")
+```
+
+#### 2.5 Summarise and group-by functions
+
+```{r}
+hawksFullName %>%
+  group_by(Species) %>%
+  summarise(num_rows=n(), mean_wing=mean(Wing,na.rm=1), median_wing=median(Wing,na.rm=1), trimmed_mean_wing=mean(Wing,na.rm=1,trim=0.1), mean_wing_tail_ratio=mean(Wing/Tail,na.rm=1))
+```
+
+```{r}
+hawksFullName %>%
+  group_by(Species) %>%
+  select(Wing, Weight, Culmen, Hallux, Tail, StandardTail, Tarsus, Crop) %>%
+  summarise(across(everything(),~sum(is.na(.x))))
+```
+
+## 3. Exploratory Data Analysis
+
+#### 3.1 Combining location estimators with the summarise function
+
+```{r}
+hawksFullName %>%
+  group_by(Species) %>%
+  summarise(Wing_mean=mean(Wing,na.rm=1), Wing_t_mean=mean(Wing,na.rm=1,trim=0.1), Wing_med=median(Wing,na.rm=1), Weight_mean=mean(Weight,na.rm=1), Weight_t_mean=mean(Weight,na.rm=1,trim=0.1), Weight_med=median(Weight,na.rm=1))
+```
+
+#### 3.2 Location and dispersion estimators under linear transformations
+
+$X_1,...,X_n$ has sample mean $\mu$.
+
+Let $\tilde{X_i} = a \cdot X_i + b$ for $a,b\in \mathbb{R}$.
+
+Then the sample mean of $\tilde{X_i}$ is $$\frac{\tilde{X_1}+...+\tilde{X_n}}{n} = \frac{a \cdot (\tilde{X_1}+...+\tilde{X_n) + n \cdot b}}{n} = a \cdot \mu + b.$$
+
+
+$X_1,...,X_n$ has sample variance $S^2_X = \frac{\Sigma(X_i - \mu)^2}{n-1}$.
+
+Then $\tilde{X_i}$ has sample variance $$\frac{\Sigma(\tilde{X_i} - \tilde{\mu})^2}{n-1} = \frac{\Sigma(a \cdot X_i + b - a \cdot \mu - b)^2}{n-1} = \frac{a^2\Sigma(X_i - \mu)^2}{n-1} = a^2 \cdot S^2_X.$$
+
+Also, $\tilde{X_i}$ has sample standard deviation $a \cdot S_X$ where $S_X$ is the sample standard deviation of $X_i$.
+
+
+#### 3.3 Robustness of location estimators
+
+```{r}
+hal<-Hawks$Hallux # Extract the vector of hallux lengths
+hal<-hal[!is.na(hal)] # Remove any nans
+outlier_val<-100
+num_outliers<-10
+corrupted_hal<-c(hal,rep(outlier_val,times=num_outliers))
+mean(hal)
+mean(corrupted_hal)
+
+num_outliers_vect<-seq(0,1000)
+means_vect<-c()
+for(num_outliers in num_outliers_vect){
+  corrupted_hal<-c(hal,rep(outlier_val,times=num_outliers))
+  means_vect<-c(means_vect,mean(corrupted_hal))
+}
+
+medians_vect<-c()
+for(num_outliers in num_outliers_vect){
+  corrupted_hal<-c(hal,rep(outlier_val,times=num_outliers))
+  medians_vect<-c(medians_vect,median(corrupted_hal))
+}
+
+t_means_vect<-c()
+for(num_outliers in num_outliers_vect){
+  corrupted_hal<-c(hal,rep(outlier_val,times=num_outliers))
+  t_means_vect<-c(t_means_vect,mean(corrupted_hal,trim=0.1))
+}
+
+df_means_medians<-data.frame(num_outliers=num_outliers_vect, mean=means_vect,t_mean=t_means_vect,
+median=medians_vect)
+
+df_means_medians%>%
+  pivot_longer(!num_outliers, names_to = "Estimator", values_to = "Value")%>% 
+  ggplot(aes(x=num_outliers,color=Estimator,linetype=Estimator,y=Value))+ geom_line()+xlab("Number of outliers")
+```
+
+
+#### 3.4 Box plots and outliers
+
+```{r}
+ggplot(Hawks, aes(x=Species,y=Weight)) + geom_boxplot()
+```
+
+
