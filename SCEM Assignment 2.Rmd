@@ -223,4 +223,18 @@ df_means_medians%>%
 ggplot(Hawks, aes(x=Species,y=Weight)) + geom_boxplot()
 ```
 
+```{r}
+# Creating a function which computes the number of outliers within a sample
+outliers <- function(x){
+  q25 <- quantile(x,0.25,na.rm=1)
+  q75 <- quantile(x,0.75,na.rm=1)
+  IQR <- q75 - q25
+  return(x[((x<q25-1.5*IQR)|(x>q75+1.5*IQR))&!is.na(x)])
+}
+num_outliers <- function(x){return(length(outliers(x)))}
+
+Hawks %>%
+  group_by(Species) %>%
+  summarise(num_outliers_weight=num_outliers(Weight))
+```
 
