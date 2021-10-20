@@ -1,0 +1,94 @@
+---
+title: "SCEM Assignment 4"
+author: "Max Kirwan"
+date: "20/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(tidyverse)
+```
+
+## 1. Bayes Theorem
+
+Notes hand written in book.
+
+## 2. Conditional probabilities
+
+Notes hand written in book.
+
+## 3. Sampling with replacement
+
+Let $A_{z,35}$ be the event that z out of the 35 selections were red spheres.
+
+Then $\mathbb{P}(A_{z,35}) = \binom{35}{z}\cdot(\frac{3}{10})^z\cdot(\frac{7}{10})^{35-z}$
+
+```{r}
+# Creating a function to compute the probability that z out of 35 balls selected are red
+prob_red_spheres <- function(z){
+  return(choose(35,z) * (3/10)^z * (7/10)^(35-z))
+}
+prob_red_spheres(20)
+```
+```{r}
+# Generating a data frame for different values of z and their associated probabilities
+prob_by_num_reds <- data.frame(num_reds=seq(1,35)) %>%
+  mutate(probability=prob_red_spheres(num_reds))
+prob_by_num_reds %>% head(3)
+```
+```{r}
+ggplot(prob_by_num_reds, aes(x=num_reds, y=probability)) + geom_line() + xlab("Number of reds") + ylab("Probability") + theme_bw()
+```
+```{r}
+num_trials <- 1000
+set.seed(0)
+sampling_with_replacement_simulation <- data.frame(trial=seq(1,num_trials)) %>%
+  mutate(sample_balls=map(.x=trial,~sample(10,35,replace=1)))
+sampling_with_replacement_simulation <- sampling_with_replacement_simulation %>%
+  mutate(num_reds=map_dbl(.x=sample_balls,~sum(.x<=3)))
+sampling_with_replacement_simulation %>% head(3)
+```
+
+```{r}
+num_reds_in_simulation <- sampling_with_replacement_simulation %>% pull(num_reds)
+prob_by_num_reds <- prob_by_num_reds %>% mutate(simulation_count=map_dbl(.x=num_reds,~sum(num_reds_in_simulation==.x)))
+prob_by_num_reds <- prob_by_num_reds %>% mutate(expected_count=probability*num_trials)
+prob_by_num_reds %>% head(3)
+```
+
+```{r}
+prob_by_num_reds %>%
+  rename(Simulation=simulation_count,Expected=expected_count) %>%
+  pivot_longer(cols=c("Simulation","Expected"),
+names_to="Type",values_to="count") %>%
+  ggplot(aes(num_reds,count)) + geom_line(aes(linetype=Type, color=Type)) + scale_linetype_manual(values = c("solid", "dashed")) + theme_bw() + xlab("Number of reds") + ylab("Count")
+```
+
+## 4. Sampling without replacement
+
+```{r}
+num_trials <- 500000
+set.seed(0)
+sampling_without_replacement_simulation <- data.frame(trial=seq(1,num_trials)) %>%
+  mutate(sample_balls=map(.x=trial,~sample(100,10,replace=0)))
+sampling_without_replacement_simulation <- sampling_without_replacement_simulation %>%
+  mutate(num_reds=map_dbl(.x=sample_balls,~sum(.x<=50))) %>%
+  mutate(num_blues=map_dbl(.x=sample_balls,~sum(.x>50 & .x<=80))) %>%
+  mutate(num_greens=map_dbl(.x=sample_balls,~sum(.x>80 & .x<=100)))
+sampling_without_replacement_simulation <- sampling_without_replacement_simulation %>%
+  mutate(min_colour_count=pmin(num_reds,num_blues,num_greens))
+# Computing the proportion of rows for which the minimum number of the three counts is zero
+zero_min_proportion <- sum(sampling_without_replacement_simulation$min_colour_count==0)/num_trials
+zero_min_proportion
+```
+
+## 5. Mutual and pair-wise independence
+
+Notes hand written in book.
+
+## 6. The Monty Hall problem
+
+Notes hand written in book.

@@ -201,7 +201,7 @@ Let $\Omega$ be a sample space with $K$ elements.
 
 Let $\mathcal{E}:= \{A \subseteq \Omega \}$ be the set of all subsets.
 
-Then $|\mathcal{E}|=K!$.
+Then $|\mathcal{E}|=2^K$.
 
 ## 4. Introduction to probability
 
