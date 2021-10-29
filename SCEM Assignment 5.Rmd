@@ -1,0 +1,154 @@
+---
+title: "SCEM Assignment 5"
+author: "Max Kirwan"
+date: "27/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(tidyverse)
+library(SciViews)
+```
+
+## 1. Expectation and variance of a discrete random variable
+
+Answers written in note book.
+
+
+## 2. Simulating data with the uniform distribution
+
+Creating a sequence of i.i.d. copies $X_1$,...,$X_n$ with $\alpha = \beta = 0.25$.
+```{r}
+set.seed(0)
+n <- 1000
+sample_X <- data.frame(U=runif(n)) %>%
+  mutate(X=case_when((0<=U)&(U<0.25)~1, (0.25<=U)&(U<0.5)~5, (0.5<=U)&(U<=1)~0)) %>%
+  pull(X)
+sample_X
+```
+
+```{r}
+# Function to create a sequence of i.i.d.'s with inputs alpha, beta, n.
+sample_X_015 <- function(alpha, beta, n){
+  set.seed(1)
+  sample_X_vec <- data.frame(U=runif(n)) %>%
+    mutate(X=case_when((0<=U)&(U<alpha)~1, (alpha<=U)&(U<alpha+beta)~5, (alpha+beta<=U)&(U<=1)~0)) %>%
+    pull(X)
+  return(sample_X_vec)
+}
+```
+
+```{r}
+# Computing the sample average
+mean(sample_X_015(0.5,0.1,10000))
+```
+The sample average is 0.9982. This is very close to the expectation, which is $\mathbb{E}(X)= \alpha + 5\beta = 0.5 + 5\times 0.1 = 1$.
+This is due to the law of large numbers: the sample average converges towards the expectation.
+
+```{r}
+sample_averages <- data.frame(beta=seq(0.1,0.9,0.01)) %>%
+    mutate(mean=map_dbl(beta, ~mean(sample_X_015(0.1,.x,100))))
+ggplot(data=sample_averages, aes(x=beta, y=mean)) + geom_col() + xlab("Beta") + ylab("Sample Mean")
+```
+
+
+## 3. The Gaussian distribution
+
+A Gaussian random variable with mean $\mu$ and standard deviation $\sigma > 0$ has probability density function $f(x) = \frac{1}{\sigma \sqrt{2\pi}}e^{-\frac{(x-\mu )^2}{2\sigma ^2}}$.
+
+```{r}
+grid <- seq(-4,6,0.01)
+normal_distributions <- data.frame(grid) %>%
+  mutate(one=map_dbl(grid,~dnorm(.x,1,1))) %>%
+  mutate(two=map_dbl(grid,~dnorm(.x,1,sqrt(2)))) %>%
+  mutate(three=map_dbl(grid,~dnorm(.x,1,sqrt(3))))
+ggplot(data=normal_distributions, aes(x=grid)) + geom_line(aes(y=one,colour="red")) + geom_line(aes(y=two,colour="blue")) + geom_line(aes(y=three,colour="green")) + labs(title="Probability density function",x="x",y="Density",colour="Variance") + scale_color_manual(labels = c("1","2","3"), values = c("red","blue","green"))
+```
+
+```{r}
+grid <- seq(-4,6,0.01)
+normal_distributions <- data.frame(grid) %>%
+  mutate(one=map_dbl(grid,~pnorm(.x,1,1))) %>%
+  mutate(two=map_dbl(grid,~pnorm(.x,1,sqrt(2)))) %>%
+  mutate(three=map_dbl(grid,~pnorm(.x,1,sqrt(3))))
+ggplot(data=normal_distributions, aes(x=grid)) + geom_line(aes(y=one,colour="red")) + geom_line(aes(y=two,colour="blue")) + geom_line(aes(y=three,colour="green")) + labs(title="Cumulative distribution function",x="x",y="Probability",colour="Variance") + scale_color_manual(labels = c("1","2","3"), values = c("red","blue","green"))
+```
+
+```{r}
+grid <- seq(0,1,0.01)
+normal_distributions <- data.frame(grid) %>%
+  mutate(one=map_dbl(grid,~qnorm(.x,1,1))) %>%
+  mutate(two=map_dbl(grid,~qnorm(.x,1,sqrt(2)))) %>%
+  mutate(three=map_dbl(grid,~qnorm(.x,1,sqrt(3))))
+ggplot(data=normal_distributions, aes(x=grid)) + geom_line(aes(y=one,colour="red")) + geom_line(aes(y=two,colour="blue")) + geom_line(aes(y=three,colour="green")) + labs(title="Quantile function",x="Quantile",y="x",colour="Variance") + scale_color_manual(labels = c("1","2","3"), values = c("red","blue","green"))
+```
+
+
+## 4. The Binomial distribution and the central limit theorem
+
+```{r}
+binom_df <- data.frame(x=0:50) %>%
+  mutate(pmf=map_dbl(x,~dbinom(.x,50,0.7)))
+binom_df %>% head(3)
+```
+```{r}
+mu <- 50*0.7
+sigma <- sqrt(mu*(1-0.7))
+gaussian_df <- data.frame(x=seq(0,50,0.01)) %>%
+  mutate(pdf=map_dbl(x,~dnorm(.x,mu,sigma)))
+gaussian_df %>% head(3)
+```
+
+```{r}
+colours <- c("Gaussian pdf"="red", "Binomial pmf"="blue")
+fill <- c("Gaussian pdf"="white", "Binomial pmf"="white")
+ggplot() + labs(x="x",y="Probability") + theme_bw() + geom_line(data=gaussian_df,aes(x=x,y=pdf,colour="Gaussian pdf"),size=2) +
+geom_col(data=binom_df,aes(x=x,y=pmf,colour="Binomial pmf",fill="Binomial pmf")) + scale_color_manual(name = "", values=colours) +
+scale_fill_manual(name = "", values=fill) + xlim(c(20,50))
+```
+
+
+## 5. Exponential distribution
+
+```{r}
+# Cumulative distribution function for an exponential distribution with parameter lambda
+my_cdf_exp <- function(x,lambda){
+  if (x<0) {return(0)}
+  else {return(1-exp(-lambda*x))}
+}
+lambda <- 1/2
+map_dbl(.x=seq(-1,4),.f=~my_cdf_exp(x=.x,lambda=lambda))
+```
+
+```{r}
+# Confirming that my cdf exponential function works the same as the in-built function
+test_inputs <- seq(-1,10,0.1)
+my_cdf_output <- map_dbl(.x=test_inputs,.f=~my_cdf_exp(x=.x,lambda=lambda))
+inbuilt_cdf_output <- map_dbl(.x=test_inputs,.f=~pexp(q=.x,rate=lambda))
+all.equal(my_cdf_output,inbuilt_cdf_output)
+```
+
+```{r}
+# Quantile function for an exponential distribution with parameter lambda
+my_quantile_exp <- function(p,lambda){
+  if (p<0 | p>1) {return("Invalid argument p, must have 0 <= p <= 1")}
+  else {return(-ln(1-p)/lambda)}
+}
+map_dbl(.x=seq(0,1,0.2),.f=~my_quantile_exp(p=.x,lambda=lambda))
+```
+
+```{r}
+# Confirming that my quantile exponential function works the same as the in-built function
+test_inputs <- seq(0.01,0.99,0.01)
+my_qf_output <- map_dbl(.x=test_inputs,.f=~my_quantile_exp(p=.x,lambda=lambda))
+inbuilt_qf_output <- map_dbl(.x=test_inputs,.f=~qexp(p=.x,rate=lambda))
+all.equal(my_qf_output,inbuilt_qf_output)
+```
+
+
+## 6. Poisson distribution
+
+Answers written in notebook.
