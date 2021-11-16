@@ -1,0 +1,147 @@
+---
+title: "SCEM Assignment 6"
+author: "Max Kirwan"
+date: "10/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(tidyverse)
+```
+
+
+## 1. A Gaussian model for red tailed hawks
+```{r}
+library(Stat2Data)
+data("Hawks")
+
+RedTailedDf <- Hawks %>%
+  filter(Species=="RT") %>%
+  select(c("Weight","Tail","Wing"))
+RedTailedDf %>% head(5)
+```
+
+```{r}
+# Finding the maximum likelihood estimates for mu and sigma
+RedTailedTail <- RedTailedDf %>% pull("Tail")
+mu_MLE <- sum(RedTailedTail)/length(RedTailedTail)
+sigma_MLE <- sqrt(sum((RedTailedTail-mu_MLE)**2)/length(RedTailedTail))
+
+weights <- seq(mu_MLE-5*sigma_MLE,mu_MLE+5*sigma_MLE,sigma_MLE*0.001)
+colours <- c("MLE Density"="red", "Kernel Density"="blue")
+ggplot() + geom_line(data=data.frame(Weight=weights,Density=dnorm(weights,mu_MLE,sigma_MLE)),aes(x=Weight,y=Density,colour="MLE Density")) + geom_density(data=RedTailedDf, aes(x=Tail,colour="Kernel Density")) + labs(x="Tail Length (mm)",y="Density",colour="Estimator") + theme_bw() + scale_colour_manual(values=colours)
+```
+
+## 2. Location estimators with Gaussian data
+
+```{r}
+set.seed(0)
+num_trials_per_sample_size <- 100
+min_sample_size <- 5
+max_sample_size <- 1000
+sample_size_inc <- 5
+mu_0 <- 1
+sigma_0 <- 3
+
+simulation_df <- crossing(trial=seq(num_trials_per_sample_size),sample_size=seq(min_sample_size,max_sample_size,sample_size_inc)) %>% # create data frame of all pairs of sample_size and trial
+  mutate(simulation=pmap(.l=list(trial,sample_size), .f=~rnorm(.y,mean=mu_0,sd=sigma_0))) %>% # simulate sequences of Gaussian random variables
+  mutate(sample_mean=map_dbl(.x=simulation,.f=mean)) %>% # compute the sample means
+  mutate(sample_median=map_dbl(.x=simulation,.f=median)) %>% # compute the sample medians
+  group_by(sample_size) %>%
+  summarise(mse_mean=mean((sample_mean-mu_0)**2),mse_median=mean((sample_median-mu_0)**2))
+
+simulation_df <- simulation_df %>%
+  pivot_longer(cols=c(mse_mean,mse_median),names_to="estimator",values_to="mse")
+
+ggplot(data=simulation_df,aes(x=sample_size,y=mse,colour=estimator)) + geom_smooth() + labs(x="Sample size",y="Mean squared error")
+```
+
+## 3. Unbiased estimation of the population variance
+
+```{r}
+set.seed(0)
+num_trials_per_sample_size <- 100
+min_sample_size <- 5
+max_sample_size <- 1000
+sample_size_inc <- 5
+mu_0 <- 1
+sigma_0 <- 3
+
+var_MLE <- function(X,X_bar){return(sum((X-X_bar)**2)/length(X))}
+var_U <- function(X,X_bar){return(sum((X-X_bar)**2)/(length(X)-1))}
+
+simulation_df_2 <- crossing(trial=seq(num_trials_per_sample_size),sample_size=seq(min_sample_size,max_sample_size,sample_size_inc)) %>% # create data frame of all pairs of sample_size and trial
+  mutate(simulation=pmap(.l=list(trial,sample_size), .f=~rnorm(.y,mean=mu_0,sd=sigma_0))) %>% # simulate sequences of Gaussian random variables
+  mutate(var_MLE=map_dbl(.x=simulation,.f=~var_MLE(.x,mean(.x))), var_U=map_dbl(.x=simulation,.f=~var_U(.x,mean(.x)))) %>% # compute the two variance estimators
+  mutate(sd_MLE=map_dbl(.x=simulation,.f=~sqrt(var_MLE(.x,mean(.x)))),sd_U=map_dbl(.x=simulation,.f=~sqrt(var_U(.x,mean(.x))))) %>% # compute the two sd estimators
+  group_by(sample_size) %>%
+  summarise(bias_var_MLE=mean(var_MLE)-sigma_0**2,bias_var_U=mean(var_U)-sigma_0**2,bias_sd_MLE=mean(sd_MLE)-sigma_0,bias_sd_U=mean(sd_U)-sigma_0)
+
+simulation_df_2 <- simulation_df_2 %>%
+  pivot_longer(cols=c(bias_var_MLE,bias_var_U,bias_sd_MLE,bias_sd_U),names_to="estimator",values_to="bias")
+
+ggplot(data=simulation_df_2,aes(x=sample_size,y=bias,colour=estimator)) + geom_smooth() + labs(x="Sample size",y="Bias",colour="Estimator")
+```
+
+## 4. Maximum likelihood estimates for the Gaussian distribution
+
+See hand written notes.
+
+
+## 5. Maximum likelihood estimate with the Poisson distribution
+
+See hand written notes for proof that $\hat{\lambda}_{MLE} = \bar{X}$.
+
+```{r}
+set.seed(0)
+num_trials_per_sample_size <- 100
+min_sample_size <- 5
+max_sample_size <- 1000
+sample_size_inc <- 5
+lambda_0 <- 0.5
+
+simulation_df_3 <- crossing(trial=seq(num_trials_per_sample_size),sample_size=seq(min_sample_size,max_sample_size,sample_size_inc)) %>% # create data frame of all pairs of sample_size and trial
+  mutate(simulation=pmap(.l=list(trial,sample_size), .f=~rpois(.y,lambda_0))) %>% # simulate sequences of Gaussian random variables
+  mutate(sample_mean=map_dbl(.x=simulation,.f=mean)) %>% # compute the sample means
+  group_by(sample_size) %>%
+  summarise(mse=mean((sample_mean-lambda_0)**2))
+
+ggplot(data=simulation_df_3,aes(x=sample_size,y=mse)) + geom_smooth() + labs(x="Sample size",y="Mean squared error")
+```
+
+```{r}
+VonB <- read.csv("/Users/maxkirwan/Desktop/Uni/Data Science MSc/SCEM/Statistical-Computing-and-Empirical-Methods/VonBortkiewicz.csv")
+
+# Modelling the fatalities as independent r.v.'s from a Poisson distribution with parameter lambda
+# Computing the maximum likelihood estimate for lambda
+fatalities_MLE <- mean(pull(VonB,"fatalities"))
+print(fatalities_MLE)
+
+# Calculating the probability that a single cavalry corps has no fatalities in a single year
+print(dpois(0,fatalities_MLE))
+```
+
+
+## 6. Maximum likelihood estimate for the exponential distribution
+
+See hand written notes for proof that $\hat{\lambda}_{MLE} = \frac{1}{\bar{X}}$.
+
+```{r}
+CustomerPurchases <- read.csv("/Users/maxkirwan/Desktop/Uni/Data Science MSc/SCEM/Statistical-Computing-and-Empirical-Methods/CustomerPurchases.csv")
+
+CustomerPurchases <- CustomerPurchases %>%
+  mutate(time_diffs=lead(Time)-Time)
+
+# Modelling the time differences as independent r.v.'s from an exponential distribution with parameter lambda
+# Computing the maximum likelihood estimate for lambda
+time_diffs_MLE <- 1/mean(pull(CustomerPurchases,time_diffs),na.rm=1)
+print(time_diffs_MLE)
+
+# Estimating the probability of an arrival time in excess of one minute
+print(1-pexp(60,time_diffs_MLE))
+```
+
+
