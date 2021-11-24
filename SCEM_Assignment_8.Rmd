@@ -1,0 +1,233 @@
+---
+title: "SCEM Assignment 8"
+author: "Max Kirwan"
+date: "24/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(tidyverse)
+```
+
+## 1. Obstacles to valid scientific inference
+
+We shall discuss three barriers to drawing scientific conclusions.
+
+#### 1.1 Measurement distortions
+
+A valid measurement is one that accurately reflects the aspect of reality that you intend to measure. For example, if we are wanting to find out how tall a population is, we can accurately measure each person's height in cm. However, in some situations it is not possible to accurately measure something, e.g. if we want to measure concentration levels we may instead measure a candidate's responses to specific test questions. This is known as a proxy measurement. <br>
+
+Measurement error is the difference between the measured value of a quantity and its true value. This can be as a result of faulty equipment, rounding errors, data input errors etc.
+
+#### 1.2 Selection bias
+
+Selection bias is when the data included in the analysis misrepresents the underlying population of interest. This can occur in several forms:
+
+* Sample bias - if some members are more likely to be sampled than others
+* Self-selection bias - candidates deciding themselves whether to be invovled in the study
+* Attrition bias - candidates leaving the study early
+* Post hoc selection - when the data subset is chosen based upon the sample itself
+
+#### 1.3 Confounding variables
+
+Correlation does not imply causation! Correlation could occur due to a confounding variable. This is a third variable Z that has a causal effect upon both X and Y. For example, hot weather is a confounding variable to ice cream and sunglasses sales. <br>
+We can use randomisation on thr independent variable X to eliminate the effect of any confounding variables and hence determine causation.
+
+
+## 2. An unpaired t test
+
+```{r}
+library(palmerpenguins)
+peng_AC <- penguins %>% filter(species == "Adelie" | species == "Chinstrap")
+
+t_test_function <- function(data,val_col,group_col,var_equal){
+  data <- data %>% drop_na(val_col)
+  group_col_vals <- data %>% pull(group_col) %>% unique()
+  mean_0 <- data %>% filter(.data[[group_col]]==group_col_vals[1]) %>% pull(val_col) %>% mean()
+  mean_1 <- data %>% filter(.data[[group_col]]==group_col_vals[2]) %>% pull(val_col) %>% mean()
+  sd_0 <- data %>% filter(.data[[group_col]]==group_col_vals[1]) %>% pull(val_col) %>% sd()
+  sd_1 <- data %>% filter(.data[[group_col]]==group_col_vals[2]) %>% pull(val_col) %>% sd()
+  n_0 <- data %>% filter(.data[[group_col]]==group_col_vals[1]) %>% nrow()
+  n_1 <- data %>% filter(.data[[group_col]]==group_col_vals[2]) %>% nrow()
+  sd_squared_0_1 <- ((n_0-1)*sd_0^2 + (n_1-1)*sd_1^2)/(n_0+n_1-2)
+  test_statistic <- (mean_0-mean_1)/(sqrt(sd_squared_0_1)*sqrt(1/n_0+1/n_1))
+  dof <- n_0+n_1-2
+  p_val <- 2*(1-pt(abs(test_statistic),df=dof))
+  test_statistic_welch <- (mean_0-mean_1)/sqrt(sd_0^2/n_0+sd_1^2/n_1)
+  dof_welch <- (sd_0^2/n_0+sd_1^2/n_1)^2/((sd_0^2/n_0)^2/(n_0-1)+(sd_1^2/n_1)^2/(n_1-1))
+  p_val_welch <- 2*(1-pt(abs(test_statistic_welch),df=dof_welch))
+  cohens_d <- (mean_0-mean_1)/sqrt(sd_squared_0_1)
+  if(var_equal==TRUE){return(data.frame(t_stat=test_statistic,dof=dof,p_val=p_val,d=cohens_d))}
+  if(var_equal==FALSE){return(data.frame(t_stat=test_statistic_welch,dof=dof_welch,p_val=p_val_welch,d=cohens_d))}
+}
+
+t_test_function(data=peng_AC,val_col="body_mass_g",group_col="species",var_equal=TRUE)
+t_test_function(data=peng_AC,val_col="body_mass_g",group_col="species",var_equal=FALSE)
+```
+```{r}
+# Comparing my function with R's inbuilt t test function
+t.test(body_mass_g~species,data=peng_AC,var.equal=TRUE) # student's t test
+t.test(body_mass_g~species,data=peng_AC) # Welch's t test
+```
+
+## 3. Statistical hypothesis testing
+
+We shall give brief definitions for the following concepts:
+
+* Null hypothesis - the original hypothesis, that there is no difference between a characteristic of the population, deemed to be true until proven wrong.
+* Alternative hypothesis - a statement that directly contradicts the null hypothesis, which we are trying to determine.
+* Test statistic - a number calculated to show how closely your observed data matches the distribution assumed under the null hypothesis
+* Type I error - rejecting the null hypothesis when it is true.
+* Type II error - accepting the null hypothesis when it is false.
+* Test size - the test size is $\alpha _{test} = \mathbb{P}($Type I error $| H_0$ is true).
+* Test power - the power of a test is $1-\beta _{test}$ where $\beta _{test} = \mathbb{P}($Type II error $| H_1$ is true).
+* Significance level - the significance level of a test $\alpha$ is an upper bound on the test size $\alpha _{test} \le \alpha$.
+* p-value - The p-value is the probability under the null hypothesis that the test statistic takes a value as or more extreme than the observed value.
+* The effect size - The effect size is a measure for quantifying the magnitude of the observed phenomena.
+
+A common misunderstanding is that the p-value is the probability that the null hypothesis is true. The null hypothesis is a deterministic statement - it is either holds or does not hold, we cannot assign a probability to it. Instead, the p-value is the probability that under the null hypothesis, the test statistic takes a value as or more extreme than the observed value.
+
+If the p-value exceeds the significance level when conducting a statistical test, then this does not mean we have good evidence that the null hypothesis is true. It just means that we do not have enough evidence to reject the null hypothesis.
+
+## 4. Investigating test size for an unpaired Student’s t-test
+
+```{r}
+num_trials <- 1000
+sample_size <- 30
+mu_0 <- 1
+mu_1 <- 1
+sigma_0 <- 3
+sigma_1 <- 3
+alpha <- 0.05
+set.seed(0) # set random seed for reproducibility
+
+single_alpha_test_size_simulation_df <- data.frame(trial=seq(num_trials)) %>%
+  mutate(sample_0=map(.x=trial,.f=~rnorm(n=sample_size,mean=mu_0,sd=sigma_0)),sample_1=map(.x=trial,.f=~rnorm(n=sample_size,mean=mu_1,sd=sigma_1))) %>%
+  # generate random Gaussian samples
+  mutate(p_value=pmap_dbl(.l=list(trial,sample_0,sample_1),.f=~t.test(..2,..3,var.equal=TRUE)$p.value)) %>%
+  # generate p values
+  mutate(type_1_error=p_value<alpha)
+
+single_alpha_test_size_simulation_df %>% pull(type_1_error) %>% mean() # estimate of coverage probability
+```
+
+```{r}
+set.seed(0) # set random seed for reproducibility
+
+test_size_simulation_df <- crossing(alpha=c(0.01,0.05,0.1),sample_size=c(10,100),trial=seq(num_trials)) %>%
+  mutate(sample_0=map(.x=sample_size,.f=~rnorm(n=.x,mean=mu_0,sd=sigma_0)),sample_1=map(.x=sample_size,.f=~rnorm(n=.x,mean=mu_1,sd=sigma_1))) %>%
+  # generate random Gaussian samples
+  mutate(p_value=pmap_dbl(.l=list(trial,sample_0,sample_1),.f=~t.test(..2,..3,var.equal=TRUE)$p.value)) %>%
+  # generate p values
+  mutate(type_1_error=p_value<alpha)
+
+test_size_simulation_df %>% group_by(alpha,sample_size) %>% summarise(mean(type_1_error)) # estimate of coverage probability
+```
+
+## 5. The power of an unpaired t test
+
+```{r}
+num_trials <- 1000
+n_0 <- 30
+n_1 <- 30
+mu_0 <- 3
+mu_1 <- 4
+sigma_0 <- 2
+sigma_1 <- 2
+alpha <- 0.05
+
+# Exploring how the statistical power varies as a function of the significance level
+set.seed(0) # set random seed for reproducibility
+vary_sig_level <- crossing(alpha=seq(0.01,0.2,0.01),trial=seq(num_trials)) %>%
+  mutate(sample_0=map(.x=trial,.f=~rnorm(n=n_0,mean=mu_0,sd=sigma_0)),sample_1=map(.x=trial,.f=~rnorm(n=n_1,mean=mu_1,sd=sigma_1))) %>%
+  # generate random Gaussian samples
+  mutate(p_value=pmap_dbl(.l=list(trial,sample_0,sample_1),.f=~t.test(..2,..3,var.equal = TRUE)$p.value)) %>%
+  # generate p values
+  mutate(reject_null=p_value<alpha) %>%
+  group_by(alpha) %>%
+  summarise(reject_null_mean=mean(reject_null)) # estimate of coverage probability
+ggplot(vary_sig_level,aes(x=alpha,y=reject_null_mean)) + geom_line()
+```
+```{r}
+# Exploring how the statistical power varies as a function of the difference of means
+set.seed(0) # set random seed for reproducibility
+vary_mean_diff <- crossing(mean_diff=seq(0,2,0.1),trial=seq(num_trials)) %>%
+  mutate(sample_0=map(.x=mean_diff,.f=~rnorm(n=n_0,mean=mu_0,sd=sigma_0)),sample_1=map(.x=mean_diff,.f=~rnorm(n=n_1,mean=mu_0+.x,sd=sigma_1))) %>%
+  # generate random Gaussian samples
+  mutate(p_value=pmap_dbl(.l=list(trial,sample_0,sample_1),.f=~t.test(..2,..3,var.equal = TRUE)$p.value)) %>%
+  # generate p values
+  mutate(reject_null=p_value<alpha) %>%
+  group_by(mean_diff) %>%
+  summarise(reject_null_mean=mean(reject_null)) # estimate of coverage probability
+ggplot(vary_mean_diff,aes(x=mean_diff,y=reject_null_mean)) + geom_line()
+```
+
+```{r}
+# Exploring how the statistical power varies as a function of the population standard deviation
+set.seed(0) # set random seed for reproducibility
+vary_sigma <- crossing(sigma=seq(0.1,4,0.1),trial=seq(num_trials)) %>%
+  mutate(sample_0=map(.x=sigma,.f=~rnorm(n=n_0,mean=mu_0,sd=.x)),sample_1=map(.x=sigma,.f=~rnorm(n=n_1,mean=mu_1,sd=.x))) %>%
+  # generate random Gaussian samples
+  mutate(p_value=pmap_dbl(.l=list(trial,sample_0,sample_1),.f=~t.test(..2,..3,var.equal = TRUE)$p.value)) %>%
+  # generate p values
+  mutate(reject_null=p_value<alpha) %>%
+  group_by(sigma) %>%
+  summarise(reject_null_mean=mean(reject_null)) # estimate of coverage probability
+ggplot(vary_sigma,aes(x=sigma,y=reject_null_mean)) + geom_line()
+```
+
+```{r}
+# Exploring how the statistical power varies as a function of the sample size
+set.seed(0) # set random seed for reproducibility
+vary_sample_size <- crossing(sample_size=seq(10,180,30),trial=seq(num_trials)) %>%
+  mutate(sample_0=map(.x=sample_size,.f=~rnorm(n=.x,mean=mu_0,sd=sigma_0)),sample_1=map(.x=sample_size,.f=~rnorm(n=.x,mean=mu_1,sd=sigma_1))) %>%
+  # generate random Gaussian samples
+  mutate(p_value=pmap_dbl(.l=list(trial,sample_0,sample_1),.f=~t.test(..2,..3,var.equal = TRUE)$p.value)) %>%
+  # generate p values
+  mutate(reject_null=p_value<alpha) %>%
+  group_by(sample_size) %>%
+  summarise(reject_null_mean=mean(reject_null)) # estimate of coverage probability
+ggplot(vary_sample_size,aes(x=sample_size,y=reject_null_mean)) + geom_line()
+```
+
+
+## 6. Comparing the paired and unpaired t tests
+
+```{r}
+num_trials <- 1000
+n <- 30
+mu_X <- 5
+mu_Z <- 5
+sigma_X <- 1
+sigma_Z <- 1
+alpha <- 0.05
+
+set.seed(0)
+paired_unpaired_comparison <- crossing(alpha=seq(0.01,0.2,0.01),trial=seq(num_trials)) %>%
+  mutate(sample_X=map(.x=trial,.f=~rnorm(n=n,mean=mu_X,sd=sigma_X)),sample_Z=map(.x=trial,.f=~rnorm(n=n,mean=mu_Z,sd=sigma_Z))) %>%
+  mutate(p_value_X=pmap_dbl(.l=list(trial,sample_X,sample_Z),.f=~t.test(..2,..3,var.equal=TRUE,paired=TRUE)$p.value),p_value_Z=pmap_dbl(.l=list(trial,sample_X,sample_Z),.f=~t.test(..2,..3,var.equal=TRUE,paired=FALSE)$p.value)) %>%
+  mutate(reject_null_X=p_value_X<alpha,reject_null_Z=p_value_Z<alpha) %>%
+  group_by(alpha) %>%
+  summarise(X=mean(reject_null_X),Z=mean(reject_null_Z)) %>%
+  pivot_longer(cols=c(2,3),names_to="reject_null_mean",values_to="value")
+ggplot(paired_unpaired_comparison,aes(x=alpha,y=value,colour=reject_null_mean)) + geom_line() + ylab("reject_null_mean")
+```
+
+## 7. A chi-squared test of population variance
+
+```{r}
+chi_squared_test_one_sample_var <- function(sample,sigma_squared_null){
+  sample <- na.omit(sample)
+  n <- length(sample)
+  test_statistic <- (n-1)*var(sample)/sigma_squared_null
+  p_value <- 2*min(pchisq(test_statistic,df=n-1),1-pchisq(test_statistic,df=n-1))
+  return(p_value)
+}
+
+bill_adelie <- penguins %>% filter(species=="Adelie") %>% pull(bill_length_mm) %>% na.omit()
+chi_squared_test_one_sample_var(bill_adelie,3)
+```
+
