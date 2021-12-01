@@ -1,0 +1,98 @@
+---
+title: "SCEM Assignment 9"
+author: "Max Kirwan"
+date: "01/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(tidyverse)
+```
+
+## 1. Basic concepts in classification
+
+Below I shall explain some basic concepts:
+
+* **A classification rule** - This is a rule $\phi:\mathcal{X}\to\mathcal{Y}$ which takes in a feature vector $X\in\mathcal{X}$ and returns a categorical variable $\phi(\mathcal{X})\in\mathcal{Y}$.
+* **A learning algorithm** - This is an algorithm which takes in a training data set of feature vector and categorical variable pairs and learns how these are related, so that it can then predict the categorical outputs of unseen feature vectors.
+* **Training data** - This is data, in the form of feature vector and categorical variable pairs, which is used to train the learning algorithm.
+* **Feature vector** - This is a d-dimensional vector $X=(X_1,...,X_d)\in\mathcal{X}$, which represents the d recorded features. For example, the bill length, flipper length and weight of a penguin $X=(x_b,x_f,x_w)\in\mathcal{X}=\mathbb{R}^d$.
+* **Label** - A label is a categorial variable $\phi(\mathcal{X})\in\mathcal{Y}$. Using the penguin example, this might be $1$ if the penguin species is Gentoo and $0$ if the species is Adelie.
+* **Test error** - The test error is the average number of errors in the test data. An error is when the categorical variable assigned to a feature vector by the classification rule does not match to its actual categorical variable.
+* **Train error** - The train error is the average number of errors in the train data.
+* **The train test split** - This is the way we randomly divide our data set into a training and test data set. A common practice is to use an 80:20 split.
+* **Linear classifier** - A linear classifier $\phi:\mathcal{X}\to\{0,1\}$ seperates the data by cutting the feature space in two with a linear hyper-plane. This only works if the data is linearly seperable.
+
+
+## 2. The train test split
+
+```{r}
+library(Stat2Data)
+data("Hawks")
+hawks_total <- Hawks %>% select(Weight,Wing,Tail,Hallux,Species) %>% filter(Species %in% c("RT","SS")) %>% mutate(Species=as.numeric(Species=="SS")) %>% drop_na()
+
+# We want a random 60:40 split
+set.seed(23)
+sample <- sample.int(nrow(hawks_total),floor(nrow(hawks_total)*0.6))
+hawks_train <- hawks_total[sample,]
+hawks_test <- hawks_total[-sample,]
+hawks_train_x <- hawks_train %>% select(-Species)
+hawks_train_y <- hawks_train %>% select(Species)
+hawks_test_x <- hawks_test %>% select(-Species)
+hawks_test_y <- hawks_test %>% select(Species)
+
+# Choosing a deterministic value for phi which minimises the training error
+hawks_train_y %>% count(Species)
+phi <- 0
+train_error <- mean(pull(abs(phi-hawks_train_y),Species))
+test_error <- mean(pull(abs(phi-hawks_test_y),Species))
+
+# We can see that there is a roughly 70:30 split between the two species of hawks
+print(c(train_error,test_error))
+```
+
+
+## 3. Linear discriminant analysis
+
+We model $Y\in\{0,1\}$ and $X\in\mathbb{R}^4$ as a Bernoulli followed by a Gaussian:  
+
+$Y\sim \mathcal{B}(q)$ and
+$$X \sim \mathcal{N}(\mu_0,\Sigma) \text{ if }Y=0 \\ X \sim \mathcal{N}(\mu_1,\Sigma) \text{ if }Y=1$$
+
+```{r}
+lda_model <- MASS::lda(Species~.,data=hawks_train)
+lda_train_predicted <- predict(lda_model,hawks_train_x)$class %>% as.character() %>% as.numeric()
+lda_train_error <- mean(abs(lda_train_predicted-pull(hawks_train_y,Species)))
+lda_test_predicted <- predict(lda_model,hawks_test_x)$class %>% as.character() %>% as.numeric()
+lda_test_error <- mean(abs(lda_test_predicted-pull(hawks_test_y,Species)))
+c(lda_train_error,lda_test_error)
+```
+
+## 4. Logistic regression
+
+Logistic regression is a probabilistic method for learning a linear classifier $\phi(x)=\mathbf{1}\{wx^\top+w_0\ge0\}$.  
+We only need to model $\mathbb{P}(Y=y|X=x)$.  
+We use the sigmoid function $S(z)=\frac{1}{1+e^{-z}}$.
+
+```{r}
+# Generating a plot to display the sigmoid function
+sigmoid_func <- function(z){1/(1+exp(-z))}
+sigmoid_plot_df <- data.frame(z=seq(-10,10,0.001)) %>%
+  mutate(sigmoid_z=map_dbl(.x=z,.f=~sigmoid_func(.x)))
+ggplot(sigmoid_plot_df,aes(x=z,y=sigmoid_z,)) + geom_line() + theme_bw() + ylab("S(z)")
+```
+
+```{r}
+library(glmnet)
+# Training a logistic regression model
+log_reg_model <- glmnet(x=hawks_train_x%>%as.matrix(),y=pull(hawks_train_y,Species),family="binomial",alpha=0,lambda=0)
+log_reg_train_predicted <- predict(log_reg_model,hawks_train_x%>%as.matrix(),type="class")%>%as.numeric()
+log_reg_train_error <- mean(abs(pull(hawks_train_y,Species)-log_reg_train_predicted))
+log_reg_test_predicted <- predict(log_reg_model,hawks_test_x%>%as.matrix(),type="class")%>%as.numeric()
+log_reg_test_error <- mean(abs(pull(hawks_test_y,Species)-log_reg_test_predicted))
+c(log_reg_train_error,log_reg_test_error)
+```
+
