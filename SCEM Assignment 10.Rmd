@@ -1,0 +1,104 @@
+---
+title: "SCEM Assignment 10"
+author: "Max Kirwan"
+date: "08/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, include=FALSE}
+library(tidyverse)
+```
+
+## 1. Basic concepts in regression
+
+We will give a brief outline of some basic concepts in regression:
+
+* **A regression model** - This is a function $\phi:\mathcal{X}\to\mathbb{R}$ which inputs a feature vector $X\in\mathcal{X}$ and returns a continuous variable $\phi(X)\in\mathbb{R}$.
+* **Training data** - This is a partition of the data set, consisting of feature vectors and continuous variable outputs, which we use to train the regression model.
+* **Mean squared error on the test data** - $\mathcal{R}_{MSE}(\phi) := \mathbb{E}[(\phi(X)-Y)^2]$.
+* **Mean squared error on the training data** - $\hat{\mathcal{R}}_{MSE}(\phi) := \frac{1}{n}\sum^n_{i=1}(\phi(X_i)-Y_i)^2$.
+* **Supervised learning** - This is the process of learning a function based on training data which includes feature vectors and labels.
+* **Linear regression model** - This is a model which fits a straight line to the data. It is of the form $\phi:\mathcal{X}\to\mathbb{R}$ with $\phi(x)=wx^\top+w^0$, with weights $w=(w^1,...,w^d)\in\mathbb{R}^d$ and a bias $w^0\in\mathbb{R}$.
+
+
+## 2. Basic concepts in regularisation
+
+We shall also give a brief outline of some basic concepts in regularisation:
+
+* **Regularisation** - This is where we limit our search space to "smaller" models to reduce instability.
+* **Hyper-parameter** - This is a parameter which controls how high the level of regularisation is.
+* **The Euclidean norm** - $\|w\|_2 = \sqrt{w_1^2+...+w_d^2}$.
+* **The $\ell_1$ norm** - $\|w\|_1 = |w_1| + ... + |w_d|$.
+* **Validation data** - A further split of the data set which is used to finetune the hyperparameter $\lambda$.
+* **The train/validation/test split** - We split our data set into three: the training data set is used to train our model, the validation data set is used to finetune the hyperparameters and the test data set is used to test our model on unseen data. A common split uses a ratio of 60:20:20.
+* **Ridge regression** - The ridge regression method minimises the regularised objective $\hat{\mathcal{R}}_\lambda(\phi_{w,w^0}) = \frac{1}{n}\sum^n_{i=1}(wX^\top_i+w^0-Y_i)^2+\lambda\cdot\|w\|_2^2$.
+* **The Lasso** - The Lasso method minimises the regularised objective $\hat{\mathcal{R}}_\lambda(\phi_{w,w^0}) = \frac{1}{n}\sum^n_{i=1}(wX^\top_i+w^0-Y_i)^2+\lambda\cdot\|w\|_1$.
+
+## 3. An investigation into ridge regression for high-dimensional regression
+
+```{r}
+library(QSARdata)
+data(MeltingPoint)
+mp_data_total <- MP_Descriptors %>% add_column(melting_point=MP_Outcome)
+cat("Variables:", ncol(mp_data_total), "    Examples:", nrow(mp_data_total))
+```
+
+```{r}
+# Splitting data set into train/test/validate
+train_size <- floor(0.5*nrow(mp_data_total))
+val_size <- floor(0.25*nrow(mp_data_total))
+test_size <- nrow(mp_data_total)-train_size-val_size
+set.seed(23) # set random seed for reproducibility
+train_indices <- sample(seq(nrow(mp_data_total)), size=train_size)
+val_indices <- sample(setdiff(seq(nrow(mp_data_total)),train_indices), size=val_size)
+test_indices <- setdiff(seq(nrow(mp_data_total)),union(train_indices,val_indices))
+mp_train <- mp_data_total[train_indices,]
+mp_val <- mp_data_total[val_indices,]
+mp_test <- mp_data_total[test_indices,]
+
+mp_train_x <- mp_train %>% select(-melting_point) %>% as.matrix()
+mp_train_y <- mp_train %>% pull(melting_point)
+mp_val_x <- mp_val %>% select(-melting_point) %>% as.matrix()
+mp_val_y <- mp_val %>% pull(melting_point)
+mp_test_x <- mp_test %>% select(-melting_point) %>% as.matrix()
+mp_test_y <- mp_test %>% pull(melting_point)
+```
+
+```{r, include=FALSE}
+library(glmnet)
+```
+```{r}
+ridge_regression_val_error <- function(train_x,train_y,val_x,val_y,lambda){
+  glmRidge <- glmnet(x=train_x,y=train_y,alpha=0,lambda=lambda)
+  val_y_est <- predict(glmRidge,newx=val_x)
+  val_error <- mean((val_y-val_y_est)^2)
+  return(val_error)
+}
+lambdas <- 10^-8*1.25^seq(100)
+lambdas_val_errors <- data.frame(lambda=lambdas) %>%
+  mutate(val_error=map_dbl(.x=lambda,.f=~ridge_regression_val_error(mp_train_x,mp_train_y,mp_val_x,mp_val_y,.x)))
+ggplot(lambdas_val_errors,aes(x=lambda,y=val_error)) + geom_line() + scale_x_log10()
+```
+
+```{r}
+# Finding the hyper-parameter with the lowest validation error
+min_val_error <- lambdas_val_errors %>% select(val_error) %>% min()
+optimal_lambda <- lambdas_val_errors %>% filter(val_error==min_val_error) %>% pull(lambda)
+
+optimal_ridge_model <- glmnet(x=mp_train_x,y=mp_train_y,alpha=0,lambda=optimal_lambda)
+optimal_ridge_test_y_est <- predict(optimal_ridge_model,newx=mp_test_x)
+optimal_test_error <- mean((mp_test_y-optimal_ridge_test_y_est)^2)
+optimal_test_error
+```
+
+We cannot use the mean squared error on validation data as an estimate of the mean squared error on test data, as it is important that the test data remains unseen. 
+
+
+## 4. Comparing $\ell_1$ and $\ell_2$ regularisation for logistic regression
+
+When we say that a high dimensional vector $w=(w_1,..,w_d)\in\mathbb{R}^d$ is sparse, we mean that it contains many zeros.
+
+$\ell_1$ regularisation is more likely to give rise to sparse solutions than $\ell_2$ regularisation. This is because in $\ell_2$, due to the nature of $\|w\|_2$, the viable solutions have multiple coordinates, whereas in $\ell_1$, due to the nature of $\|w\|_1$, the viable solutions are limited to the corners, which are on one axis only. Therefore dimensionality is reduced.
