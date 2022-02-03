@@ -1,0 +1,151 @@
+---
+title: "SCEM Summative Assessment Section A"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, include=FALSE}
+library(tidyverse)
+```
+
+## Introduction
+
+This R Markdown document is my completion of Section A of the summative assessment for the Statistical Computing and Empirical Methods module, EMATM0061.
+
+
+
+### A.1
+First, we read in the finance data file and print the number of rows and columns.
+
+```{r}
+# Reading csv file into R data frame
+finance_data_original <- read.csv("/Users/maxkirwan/Desktop/Uni/Data Science MSc/SCEM/jy18214_EMATM0061_summative_assessment/jy18214_EMATM0061_A/finance_data_EMATM0061.csv")
+
+print(nrow(finance_data_original))
+print(ncol(finance_data_original))
+```
+This finance data frame has 1051 rows and 30 columns.
+
+### A.2
+We shall now subset the original data frame to include only the columns of interest.
+
+```{r}
+# Selecting columns of interest
+finance_data <- finance_data_original %>% dplyr::select(state_year_code,
+                                    education_expenditure = Details.Education.Education.Total,
+                                    health_expenditure = Details.Health.Health.Total.Expenditure,
+                                    transport_expenditure = Details.Transportation.Highways.Highways.Total.Expenditure,
+                                    totals_revenue = Totals.Revenue,
+                                    totals_expenditure = Totals.Expenditure)
+head(finance_data,5)[1:3]
+```
+
+### A.3
+Next, we create a new column which is a calculation of total savings.
+
+```{r}
+# Creating new totals_savings column
+finance_data <- finance_data %>% mutate(totals_savings=totals_revenue-totals_expenditure)
+head(finance_data,3)[c(1,5,6,7)]
+```
+
+
+### A.4
+Next, we shall reformat the state and year columns as required.
+
+```{r}
+# Formatting state and year columns
+finance_data <- finance_data %>% separate(col=state_year_code,into=c("state","year"),sep="__",convert=1)
+finance_data <- finance_data %>% mutate(state=str_to_title(finance_data$state))
+head(finance_data,3)[c(1,2,6,7,8)]
+```
+
+
+### A.5
+We shall now generate a plot which displays the total revenue by year for Louisiana, Montana, Mississippi and Kentucky.
+
+```{r}
+# Subsetting our df to include required states only
+finance_data_subset <- finance_data %>% subset(state %in% c("Louisiana","Montana","Mississippi","Kentucky"))
+```
+
+```{r,message=FALSE,warning=FALSE}
+# Generating a plot to display total revenue by year for the four states
+library(scales) # needed to scale y axis to millions
+ggplot(finance_data_subset,aes(x=year,y=totals_revenue,colour=state,linetype=state)) +
+  geom_smooth(method='loess',formula='y ~ x') +
+  scale_y_continuous(labels=unit_format(unit="M", scale=1e-6)) +
+  labs(title="Total Revenue by Year",x="Year",y="Revenue ($)",colour="State",linetype="State") + 
+  theme_bw()
+```
+
+
+### A.6
+Next, we shall create a function to determine the decade, and use this to add a new column to the data frame corresponding to the decade.
+
+```{r}
+# The function get_decade takes a year as input and outputs the decade of that year
+get_decade <- function(year){
+  if(!(year%%1 == 0)){return("Error: input not an integer value")}
+  years_past_decade <- year%%10
+  return(year-years_past_decade)
+}
+
+# Adding new decade column to finance_data
+finance_data <- finance_data %>% mutate(decade=map_dbl(.x=year,.f=~get_decade(.x)))
+
+# Which 3 states had the highest average savings over the decade starting in 2000?
+avg_savings_2000 <- finance_data %>%
+  subset(decade==2000) %>%
+  group_by(state) %>%
+  summarise(average_savings=mean(totals_savings,na.rm=1)) %>%
+  arrange(desc(average_savings))
+head(avg_savings_2000,3)
+```
+Texas, Ohio and California had the highest average savings over the decade started in 2000.
+
+
+### A.7
+We shall now generate a new data frame which displays some summary statistics for the state of Alaska.
+
+```{r}
+# Creating a summary data frame showing mean and median expenditures per decade in Alaska
+alaska_summary <- finance_data %>%
+  subset(state=="Alaska") %>%
+  group_by(decade) %>%
+  summarise(ed_mn=mean(education_expenditure,na.rm=1),ed_md=median(education_expenditure,na.rm=1),he_mn=mean(health_expenditure,na.rm=1),he_md=median(health_expenditure,na.rm=1),tr_mn=mean(transport_expenditure,na.rm=1),tr_md=median(transport_expenditure,na.rm=1))
+alaska_summary
+```
+
+### A.8
+Finally, we shall create a function and use it to create a new data frame, containing values related to the state of Idaho, where any missing values are replaced with their corresponding median value.
+
+```{r}
+# The function impute_by_median replaces any NAs from a numerical vector with the median of the vector
+impute_by_median <- function(x){
+  median <- median(x,na.rm=1)
+  impute <- function(z){
+    if(is.na(z)){return(median)}
+    else{return(z)}
+  }
+  return(map_dbl(.x=x,.f=~impute(.x)))
+}
+
+# Subsetting the finance df to include only data relating to Idaho in the decade 2000
+idaho_2000 <- finance_data %>%
+  subset(state=="Idaho" & decade==2000) %>%
+  dplyr::select(-state,-decade)
+
+# Imputing by median on all columns in idaho_2000 df
+idaho_2000_imputed <- idaho_2000 %>% mutate(education_expenditure=impute_by_median(education_expenditure),
+                      health_expenditure=impute_by_median(health_expenditure),
+                      transport_expenditure=impute_by_median(transport_expenditure),
+                      totals_revenue=impute_by_median(totals_revenue),
+                      totals_expenditure=impute_by_median(totals_expenditure),
+                      totals_savings=impute_by_median(totals_savings))
+
+idaho_2000_imputed[c(1,2,3,7)]
+```
+

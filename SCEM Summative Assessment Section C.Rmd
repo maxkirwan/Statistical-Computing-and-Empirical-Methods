@@ -1,0 +1,246 @@
+---
+title: "SCEM Summative Assessment Section C"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, include=FALSE}
+library(tidyverse)
+```
+
+## Introduction
+
+In this report, I shall investigate the paired Student's t-test. I shall describe when to use this test, how it works, and then I shall apply the test to a real world data set.
+
+## 1. Paired t-test
+
+The paired Student's t-test (or simply the paired t-test) is a statistical procedure used to determine whether the mean difference between two variables for the same subject is $0$. Often these two variables are separated by time, such as levels of air pollution in different cities in 1980 and in 1990. Another common scenario that the paired t-test is appropriate for is when a single set of subjects has something applied to them and the test is intended to check for an effect. For example, the reaction times of subjects may be recorded with and without the consumption of alcohol. This results in pairs of observations, since each subject is measured twice. We are interested in determining whether the mean of the differences in variables for each pair is equal to $0$.  
+<br>
+
+#### Hypotheses
+
+There are two competing hypotheses, the **null hypothesis** and the **alternative hypothesis**. The null hypothesis is the assumption that the true mean difference between the paired samples is $0$. This is equivalent to saying that there is no change between the two variables, e.g. there may be no difference in pollution levels in 1980 and 1990 in the selected cities. Conversely, the alternative hypothesis assumes the negation of the null hypothesis; that the true mean difference between the paired samples is not equal to $0$.
+$$H_0:\mu=0 \\
+H_1:\mu\ne0 \\$$
+Instead of using a two-tailed alternative hypothesis, we can also use a lower- or upper-tailed hypothesis depending on the expected outcome.
+$$H_1:\mu>0 \text{  (upper-tailed)}\\
+H_1:\mu<0 \text{  (lower-tailed)}\\$$
+This may be useful to increase the power of the test. The **power** is the probability of a hypothesis test to find an effect if there is a true effect to be detected.  
+<br>
+
+#### Assumptions
+
+We make several assumptions in order to apply the paired t-test. Firstly, the observations must be independent of one another. Secondly, the differences must be approximately Gaussian. It is important to note that it is the differences between the paired samples and not the original data values that must have a Gaussian distribution.  
+<br>
+
+#### Procedure
+
+Once we have formed our statistical hypotheses and validated all assumptions, we are ready to proceed with the paired t-test.  
+First we choose a **significance level**, $\alpha$. This must be done before we carry out the test.  
+<br>
+Suppose our samples are taken from two paired datasets $X_1,...,X_n$ and $Y_1,...,Y_n$, with the differences $Z_i=Y_i-X_i$ modelled as a Gaussian distribution $Z_1,...,Z_n\sim\mathcal{N}(\mu,\sigma^2)$.  
+The paired t-test has **test statistic**
+$$T:=\frac{\bar{Z}}{S_Z/\sqrt{n}} \\
+\text{where } \bar{Z}:=\tfrac{1}{n}\sum^n_{i=1}Z_i \text{ and } (S_Z)^2:=\tfrac{1}{n-1}\sum^n_{i=1}(Z_i-\bar{Z})^2.$$
+Under the null hypothesis the test statistic is t-distributed with $n-1$ degrees of freedom.  
+We compute the numerical value of the test statistic based on the two samples, $\tau$.  
+The test statistic enables the data from the study to be compared to the results we would expect under the null hypothesis. Since the null hypothesis assumes the t-distribution, which has a known area, we are able to calculate a probability value (p-value).  
+The **p-value** is the probability of observing the test statistic under the null hypothesis, i.e. the probability that $T$ takes on a value at least as extreme as $\tau$ under $H_0$:
+$$p=\mathbb{P}(|T|\ge|\tau||H_0)=2(1-F_{n-1}(|\tau|))$$
+where $F_{n-1}(|\tau|)$ is the distribution function for a t-distribution with $n-1$ degrees of freedom. This can be calculated using the in-built R function `pt(q,df)`.  
+<br>
+
+If the p-value is below the significance level $\alpha$ then we reject the null hypothesis $H_0$ in favour of the alternative hypothesis $H_1$. If the p-value is above $\alpha$ then we accept $H_0$ (or more accurately, we accept that there is not enough evidence at this significance level to reject $H_0$ in favour of $H_1$).  
+So the larger the test statistic, the smaller the p-value and the more likely we are to reject the null hypothesis.  
+<br>
+
+
+## 2. Investigating the probability of Type I error
+
+In reality, exactly one of either $H_0$ or $H_1$ holds. If the result of the paired t-test corresponds with reality, then a correct decision has been made. However if it does not, then an error has been made.  
+There are two types of statistical error:
+
+* **Type I error** - rejecting $H_0$ when $H_0$ is actually correct.
+* **Type II error** - failing to reject $H_0$ when $H_0$ is incorrect.
+
+We are generally more cautious about getting a Type I error, since $H_0$ is our default position.  
+<br>
+We shall now conduct a simulation study to investigate the probability of Type I error under the null hypothesis for the paired t-test.  
+Again, consider the differences $Z_1,...,Z_n$ as above. Under the assumption that $H_0$ is true, the differences are t-distributed with $n-1$ degrees of freedom.
+
+```{r}
+num_trials <- 1000
+n <- 50 # Sample size
+set.seed(23) # Set random seed for reproducibility
+
+paired_t_test_simulation <- crossing(alpha=seq(0.0025,0.25,0.0025),trial=seq(num_trials)) %>%
+  mutate(sample=map(.x=alpha,.f=~rt(n=n,df=n-1))) %>%
+  # Random sample from t-distribution
+  mutate(test_statistic=map_dbl(.x=sample,.f=~mean(.x)/(sd(.x)/sqrt(length(.x))))) %>%
+  # Calculate test statistic
+  mutate(p_value=map2_dbl(.x=test_statistic,.y=sample,.f=~2*(1-pt(abs(.x),df=length(.y))))) %>%
+  # Calculate p-value
+  mutate(type_1_error=as.numeric(p_value<alpha)) %>%
+  # Has a Type I error occurred?
+  group_by(alpha) %>%
+  summarise(proportion_type_1_error=mean(type_1_error))
+  # Calculate the proportion of Type I errors
+
+ggplot(paired_t_test_simulation,aes(x=alpha,y=proportion_type_1_error)) + geom_line() + geom_smooth(formula=y~x,method="loess",se=FALSE) + labs(x="Significance level",y="Proportion of rounds where a Type I error is made")
+```
+
+As we can see from the graph, the proportion of rounds where a Type I error is made is nearly perfectly equal to the significance level. This is as expected, because the significance level is the probability that we make a Type I error. Therefore as we increase `num_trials`, we would see a convergence of the black line graph towards the blue line of best fit.
+
+
+## 3. Applying the paired t-test to a real world data set
+
+I shall now apply the paired t-test to a real world data set. I am particularly interested in recent burglary rates within Bristol.  
+The data set I shall use relates to crime levels in Bristol by area and year, with recordings of the number of crimes, the number of violent sexual offences and the number of burglaries.  
+It is from the Open Data Bristol website: https://opendata.bristol.gov.uk  
+Open Data Bristol provides many data sets relating to the city, mainly consisting of publicly collected data published by Bristol City Council.
+
+#### Data set structure
+
+```{r}
+# Reading in csv downloaded from Open Data Bristol
+bristol_crime <- read.csv("/Users/maxkirwan/Desktop/Uni/Data Science MSc/SCEM/jy18214_EMATM0061_summative_assessment/jy18214_EMATM0061_C/crime-recorded-by-police-by-selected-offence-groups-in-bristol-by-ward.csv",sep=";")
+colnames(bristol_crime) # display column names
+nrow(bristol_crime) # display number of rows
+```
+
+As we can see, the data set consists of $12$ columns, with $175$ entries.
+
+We are interested in the number of burglaries by ward, relating to the variable `Burglary..number.` However, we must take into consideration that some areas of Bristol are significantly larger than other areas. To counteract this bias, we shall instead use the metric `Burglary..rate.per.1000.ward.population.` (which we shall rename as `Burglary.Rate`).
+
+```{r}
+bristol_burglary_rate <- bristol_crime %>% select(c(2,3,10)) %>% rename(Burglary.Rate=Burglary..rate.per.1000.ward.population.)
+head(bristol_burglary_rate,10) # display first 10 rows
+```
+#### Data exploration
+
+We shall now perform some initial data exploration.  
+The data set contains an aggregation of all wards: `Ward.Name=="Bristol"`. We use this to display the overall trend in the burglary rate in Bristol over the past 5 years.
+
+```{r}
+ggplot(filter(bristol_burglary_rate,Ward.Name=="Bristol"),aes(x=Time.Period,y=Burglary.Rate)) + geom_col(width=0.3,fill="brown") + labs(title="Bristol burglary rate",x="Time period",y="Burglary rate per 1000 people") + geom_text(aes(label=round(Burglary.Rate,2)),vjust=-0.2) + theme_bw()
+```
+
+We can see that there seems to be a recent decline in the burglary rate in Bristol.
+
+```{r}
+ggplot(bristol_burglary_rate%>%filter(substr(Ward.Name,1,1)%in%c("C","E","F")),aes(x=Ward.Name,y=Burglary.Rate,fill=Time.Period)) + geom_col(position="dodge",width=0.75) + labs(title="Bristol burglary rate for selected wards",x="Ward",y="Burglary rate per 1000 people") + theme_bw() + scale_fill_manual(values=c("darkred","indianred","orange1","bisque2","bisque1"))
+```
+
+The above graph displays the burglary rate by ward over the 5 year period. A selection of 8 of the 34 wards are displayed for conciseness.  
+<br>
+
+#### Paired t-test
+
+Although it is interesting to look at the historical data, the thing that I am most interested in is the change in burglary rate over the past year (from 2019/20 to 2020/21).
+
+```{r}
+# Creating data frame of differences in burglary rate between 2019/20 and 2020/21
+bristol_burglary_rate_diffs <- bristol_burglary_rate %>%
+  filter((Ward.Name!="Bristol") & (Time.Period %in% c("2019/20","2020/21"))) %>%
+  pivot_wider(id_cols=Ward.Name,names_from=Time.Period,values_from=Burglary.Rate) %>%
+  rename(year_19_20="2019/20",year_20_21="2020/21") %>%
+  mutate(difference=year_20_21-year_19_20) %>%
+  mutate(pos=difference>=0)
+# Displaying differences graphically
+ggplot(bristol_burglary_rate_diffs,aes(x=Ward.Name,y=difference,fill=pos)) + geom_col(position="identity",width=0.75) + guides(fill="none") + theme_bw() + theme(axis.text.x=element_text(angle=90,hjust=1)) + labs(title="Differences in burglary rate per 1000 people from 2019/20 to 2020/21",x="Ward",y="Difference")
+```
+
+The above graph shows the most recent differences in the burglary rate by ward. It seems that the burglary rate has mainly decreased over the past year. To determine whether this observation has any statistical significance, we can run a paired t-test. This is possible as there is a natural pairing between wards over the two time periods.  
+<br>
+
+#### Hypotheses
+My null hypothesis is that the true mean difference between the paired samples, $\mu$, is $0$. Since we are determining whether the burglary rate has decreased from 2019/20 to 2020/21, then we shall run a one-tailed test. Hence the alternative hypothesis is $\mu<0$.
+$$H_0:\mu=0 \\
+H_1:\mu<0 \\$$
+The advantage of running a one-tailed test is an improvement in power to reject the null hypothesis if it is truly false.  
+<br>
+
+#### Assumptions
+Let $X_1,...,X_n$ and $Y_1,...,Y_n$ be the burglary rates in 2019/20 and 2020/21 respectively. Then let $Z_i:=X_i-Y_i$ be the difference for each ward $i=1,...,n$.  
+To perform the paired t-test we model the differences as independent and identically distributed draws from a Gaussian distribution: $Z_1,...,Z_n\sim\mathcal{N}(\mu,\sigma^2)$.  
+
+The first assumption is that the differences are independent. I shall discuss the extent to which this assumption is reasonable in the given setting. It could be argued that the difference in burglary rates are not independent of one another. Multiple burglaries are usually committed by the same burglar, who may operate over an area which spans several wards in Bristol. Therefore if that burglar were to become more or less active between the two time periods (e.g. if they were caught and end up in prison), then this would have an affect on the differences in burglary rate for multiple wards. However, this phenomena is likely to only have a slight impact on the pairwise independence of a few wards, so I deem that it is not enough to violate the overall independence assumption. Therefore I conclude that, to an extent, the assumption of independence is reasonable in the given setting.  
+
+The second assumption is that the differences are from a Gaussian distribution. We can check this by looking at the shape of the density plot and QQ plot.
+
+```{r}
+ggplot(bristol_burglary_rate_diffs,aes(x=difference)) + geom_density(colour="blue") + labs(x="Difference (change in burglary rate from 2019/20 to 2020/21)",y="Density",title="Density plot to check if differences are from a Gaussian distribution") + theme_bw()
+```
+
+```{r}
+ggplot(bristol_burglary_rate_diffs,aes(sample=difference)) + stat_qq() + stat_qq_line(colour="blue") + theme_bw() + labs(x="Theoretical",y="Sample",title="QQ plot to check if differences are from a Gaussian distribution")
+```
+
+From the density plot and QQ plot we can see that the differences are approximately from a Gaussian distribution. There are several outliers, but these are not deemed to be significant enough to reject this assumption.  
+
+#### Procedure
+We are now ready to perform the test.  
+First, we select our desired significance level as $\alpha=0.05$. This corresponds to a $5\%$ chance of rejecting the null hypothesis when it is true.  
+
+I shall perform the paired t-test by using the in-built R function `t.test(x, y, paired=TRUE)`, where `x` and `y` are vectors containing  the differences, indexed as pairs.
+```{r}
+t.test(x=bristol_burglary_rate_diffs$year_20_21,y=bristol_burglary_rate_diffs$year_19_20,paired=TRUE,alternative="less")
+```
+
+The p-value is $p=0.003652$. This is the probability that the test statistic takes on a value at least as extreme as the observed value $t=-2.8593$ under the null hypothesis.  
+Since the p-value is less than our significance level, $p=0.003652<0.05=\alpha$, then we reject the null hypothesis $H_0$ in favour of the alternative hypothesis $H_1$.  
+<br>
+
+#### Conclusion
+We conclude that the burglary rate in Bristol decreased from 2019/20 to 2020/21. We note that this is not a proven fact, only that at our significance level there is enough evidence to support this claim. Of course, there is a small chance of a Type I error due to random variation.  
+Suppose instead that our test had resulted in a p-value larger than the significance level. In this case there would not have been enough evidence to support the alternative hypothesis and so we would have failed to reject the null hypothesis. To be clear, this is not the same thing as concluding that the null hypothesis is correct.  
+
+When drawing scientific conclusions from a statistical test, it is important to consider the experimental design of the test. Several obstacles to scientific inference exist - such as measurement distortions, selection bias and confounding variables - and these should be mitigated where possible through the experimental design. One important consideration in my experiment was the potential for measurement error.  
+**Measurement error** is the difference between the measured value of a quantity and its true value. It is usually more difficult to control measurement error when using a publicly available data set rather than through the primary collection of data. However, in this case using crime data recorded by the police should provide the most accurate representation of the true burglary rate in Bristol. Of course some measurement error is unavoidable, due to factors such as burglaries being unreported to the police.  
+
+In making this scientific conclusion, I am wary to mention the caveat that arises from my assumptions. In performing this test, I deemed the independence and Gaussian distribution assumptions to be acceptable. However, as previously described, there is a risk of these assumptions being violated. If this were the case then the results of my analysis may be misleading or incorrect.  
+<br>
+
+#### Further work
+
+In my assumption that the differences are from the Gaussian distribution, I noted the presence of several outliers. After some investigation, I found that these outliers relate to the 4 most central Bristol wards. Perhaps then that it is not a surprise that these saw such a large decrease in burglary rate from pre- to post-pandemic.
+
+```{r}
+bristol_burglary_rate_diffs_outliers_removed <- bristol_burglary_rate_diffs %>% arrange(difference) %>% slice(5:n())
+t.test(x=bristol_burglary_rate_diffs_outliers_removed$year_20_21,y=bristol_burglary_rate_diffs_outliers_removed$year_19_20,paired=TRUE,alternative="less")
+```
+
+After removing these outliers and re-running the test, we get a p-value of $p=0.01565$, which again is less than our significance level. Therefore, we still come to the same conclusion, that the burglary rate in Bristol decreased from 2019/20 to 2020/21, even once the outliers are removed.  
+<br>
+
+#### Running multiple t-tests
+
+Instead of just being interested in the most recent change in burglary rates, I would also like to investigate the year-on-year change. Therefore, I shall run 4 paired t-tests, on the change of burglary rate from 2016/17 to 2017/18, from 2017/18 to 2018/19, from 2018/19 to 2019/20 and from 2019/20 to 2020/21. The assumptions of independence and normality from the original test still hold. I am interested in the change of burglary rate, be that an increase or decrease, hence I shall be using two-tailed tests. I shall keep the same significance level of $\alpha=0.05$. However, since I am running multiple tests, I shall use Bonferroni adjustment, which I shall explain below.
+
+```{r}
+# Here I am running the 4 t-tests and outputting the p-values in a data frame
+bristol_burglary_rate_wide <- bristol_burglary_rate %>%
+  filter(Ward.Name!="Bristol") %>%
+  pivot_wider(id_cols=Ward.Name,names_from=Time.Period,values_from=Burglary.Rate) %>%
+  rename(year_16_17="2016/17",year_17_18="2017/18",year_18_19="2018/19",year_19_20="2019/20",year_20_21="2020/21")
+
+bristol_burglary_rate_t_tests <- data.frame(Test=seq(4),Time_Period=c("2016/17 to 2017/18","2017/18 to 2018/19","2018/19 to 2019/20","2019/20 to 2020/21")) %>%
+  mutate(p.value=map_dbl(.x=Test,.f=~t.test(x=bristol_burglary_rate_wide[[.x+2]],y=bristol_burglary_rate_wide[[.x+1]],paired=TRUE)$p.value))
+bristol_burglary_rate_t_tests
+```
+
+The data frame printed above shows the p-values for each test.  
+<br>
+
+#### Bonferroni adjustment
+
+Bonferroni adjustment is a simple technique for controlling the overall probability of a Type I error when running multiple tests. When running a single test, the probability of getting a Type I error was $0.05$. However, when running multiple tests, the probability of getting at least one Type I error will be higher than $0.05$. The Bonferroni method reduces this probability by dividing the significance level by the number of tests, and then using this as the new significance level for each test. This means that for all the tests combined, the overall significance level is $0.05$, as required.
+
+```{r}
+bristol_burglary_rate_t_tests %>% mutate(sig_level=0.05/4) %>% mutate(sig_result=p.value<sig_level)
+```
+
+From our results, we can see that 2 of the 4 tests produced significant results, which is where the null hypothesis of no change is rejected. We conclude that the burglary rate in Bristol changed (decreased) from 2017/18 to 2018/19, and again from 2019/20 to 2020/21.
+

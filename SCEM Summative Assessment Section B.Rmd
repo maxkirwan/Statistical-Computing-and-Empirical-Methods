@@ -1,0 +1,328 @@
+---
+title: "SCEM Summative Assessment Section B"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, include=FALSE}
+library(tidyverse)
+library(latex2exp)
+```
+
+
+## B.1
+
+We shall consider a security system at a factory. A sensor is designed to make a sound if a person walks within one metre of the gate. However, the sensor is not perfectly reliable: It sometimes makes a sound when there is no one present, and sometimes fails to make a sound when someone is present.
+
+For simplicity we shall view the passage of time as being broken down into a series of phases lasting exactly one minute. <br>
+For each minute, we let $p_0$ denote the conditional probability that the sensor makes a sound if there is no person within one metre of the gate, during that minute. Moreover, for each minute, we let $p_1$ denote the conditional probability that the sensor makes a sound at least once, if there is at least one person present, during that minute. Suppose also that the probability that at least one person walks within one metre of the gate over any given minute is $q$. Again, for simplicity, we assume that $p_0,p_1,q ∈ [0,1]$ are all constant. Let $\phi$ denote the conditional probability that at least one person has passed within one metre of the gate during the current minute, given that the alarm has made a sound during that minute.
+
+For each minute, let $S$ be the event that the sensor makes a sound at least once and let $P$ be the event that there is at least one person present within one metre of the gate. Then we have the following probabilities:
+
+$$\begin{equation}
+\begin{aligned}
+p_0 &= \mathbb{P}(S|P^c) \\ p_1 &= \mathbb{P}(S|P) \\ q &= \mathbb{P}(P) \\ \phi &= \mathbb{P}(P|S).
+\end{aligned}
+\end{equation}$$
+We want to give $\phi$ as a function of $p_0,p_1,q$. <br>
+Due to Bayes' Theorem, we have 
+$$\phi = \mathbb{P}(P|S) = \frac{\mathbb{P}(P) \cdot \mathbb{P}(S|P)}{\mathbb{P}(S)} = \frac{q \cdot p_1}{\mathbb{P}(S)}.$$
+Furthermore, by the Law of Total Probability, we have that
+$$\mathbb{P}(S) = \mathbb{P}(S|P) \cdot \mathbb{P}(P) + \mathbb{P}(S|P^c) \cdot \mathbb{P}(P^c) = p_1 \cdot q + p_0 \cdot (1-q).$$
+Therefore, we have 
+$$\phi = \frac{q \cdot p_1}{p_1 \cdot q + p_0 \cdot (1-q)}.$$
+
+```{r}
+# Defining a function to give the probability that at least one person has passed within one metre of the gate within the current minute, given that the alarm has made a sound during that minute
+
+c_prob_person_given_alarm <- function(p_0,p_1,q){
+  phi <- q*p_1 / (p_1*q+p_0*(1-q))
+  return(phi)
+}
+
+c_prob_person_given_alarm(p_0=0.05, p_1=0.95, q=0.1)
+```
+Next we want to see what happens to $\phi$ as we vary $q$.
+
+```{r}
+p_0 <- 0.05
+p_1 <- 0.95
+phi_varying_q <- data.frame(q=seq(0,1,0.001)) %>%
+  mutate(phi=map_dbl(.x=q,.f=~c_prob_person_given_alarm(p_0,p_1,.x)))
+ggplot(phi_varying_q,aes(x=q,y=phi)) + geom_line() + theme_bw()
+```
+
+## B.2
+
+Suppose that $\alpha,\beta,\gamma \in [0,1]$ with $\alpha+\beta+\gamma ≤ 1$ and let $X$ be a discrete random variable with distribution supported on $\{0, 1, 2, 5\}$. Suppose that $\mathbb{P} (X = 1) = \alpha$, $\mathbb{P} (X = 2) = \beta$, $\mathbb{P} (X = 5) = \gamma$ and $\mathbb{P} (X \notin \{0, 1, 2, 5\}) = 0$.
+
+(a) The probability mass function $p_X : \mathbb{R} \to [0,1]$ is defined by
+
+\[
+p_X(x) = 
+\begin{cases}
+1-(\alpha+\beta+\gamma)&\text{for $x=0$}\\
+\alpha&\text{for $x=1$}\\
+\beta&\text{for $x=2$}\\
+\gamma&\text{for $x=5$}\\
+0&\text{for $x\notin\{0,1,2,5\}$}
+\end{cases}
+\]
+
+(b) The expectation of $X$ is 
+$$\begin{equation}
+\begin{aligned}
+\mathbb{E}(X) &= \sum_{x\in\mathbb{R}} x \cdot p_X(x) \\ &= 0 \cdot (1-(\alpha+\beta+\gamma)) + 1 \cdot \alpha + 2 \cdot \beta + 5 \cdot \gamma \\ &= \alpha + 2\beta + 5\gamma
+\end{aligned}
+\end{equation}$$
+
+(c) The population variance of $X$ is
+$$\begin{equation}
+\begin{aligned}
+\mathrm{Var}(X) &= \mathbb{E}[(X-\mathbb{E}(X))^2] \\ &= \mathbb{E}[X^2-2X\mathbb{E}(X) + \mathbb{E}(X)^2] \\ &= \mathbb{E}(X^2) - 2\mathbb{E}(X)\mathbb{E}(X) + \mathbb{E}(X)^2 \\ &= \mathbb{E}(X^2) - \mathbb{E}(X)^2 \\ &= (1-(\alpha+\beta+\gamma)\cdot0^2 + \alpha\cdot1^2 + \beta\cdot2^2 + \gamma\cdot5^2 - (\alpha+2\beta+5\gamma)^2 \\ &= \alpha + 4\beta + 25\gamma - (\alpha+2\beta+5\gamma)^2
+\end{aligned}
+\end{equation}$$
+
+
+We now suppose that $X_1,...,X_n$ is a sample of independent and identically distributed random variables, each with probability mass function $p_X:\mathbb{R}\to[0,1]$ as described above.  
+Let $\bar{X}:=\frac{1}{n}\sum^n_{i=1}X_i$ be the sample mean.  
+
+(d) The expectation of the random variable $\bar{X}$ is 
+$$\begin{equation}
+\begin{aligned}
+\mathbb{E}(\bar{X}) &= \mathbb{E}(\frac{1}{n}\sum^n_{i=1}X_i) \\ &= \frac{1}{n}\sum^n_{i=1}\mathbb{E}(X_i) \\ &= \frac{1}{n}\sum^n_{i=1}(\alpha+2\beta+5\gamma) \\ &= \alpha+2\beta+5\gamma
+\end{aligned}
+\end{equation}$$
+
+(e) The population variance of the random variable $\bar{X}$ is
+$$\begin{equation}
+\begin{aligned}
+\mathrm{Var}(\bar{X}) &= \mathrm{Var}(\frac{1}{n}\sum^n_{i=1}X_i) \\ &= \frac{1}{n^2}\mathrm{Var}(\sum^n_{i=1}X_i) \\ &= \frac{1}{n^2}\sum^n_{i=1}\mathrm{Var}(X_i) \\ &= \frac{1}{n^2}\sum^n_{i=1}(\alpha+4\beta+25\gamma-(\alpha+2\beta+5\gamma)^2) \\ &= \frac{1}{n}(\alpha+4\beta+25\gamma-(\alpha+2\beta+5\gamma)^2)
+\end{aligned}
+\end{equation}$$
+Here the third equality holds due to the fact that $X_1,...,X_n$ are all independent.
+
+(f) We shall now create a function which takes as input $\alpha$, $\beta$, $\gamma$ and $n$ and outputs a sample $X_1,...,X_n$ of independent copies of $X$ according to the distribution described above.
+
+```{r}
+sample_X_0125 <- function(alpha,beta,gamma,n){
+  delta <- 1 - (alpha + beta + gamma)
+  sample_X <- sample(x=c(0,1,2,5), size=n, replace=TRUE, prob=c(delta,alpha,beta,gamma))
+  # the sample function draws n random values from the vector x based on probabilities from the vector prob
+  return(sample_X)
+}
+```
+
+(g) Now suppose that $\alpha=0.1$, $\beta=0.2$ and $\gamma=0.3$. We shall use this function to generate a sample of $n=100,000$ independent copies of $X$, distributed as described above.
+```{r}
+alpha <- 0.1
+beta <- 0.2
+gamma <- 0.3
+n <-100000
+set.seed(23) # set random seed for reproducibility
+
+my_sample_X_0125 <- sample_X_0125(alpha,beta,gamma,n)
+
+my_sample_mean <- mean(my_sample_X_0125)
+my_sample_variance <- var(my_sample_X_0125)
+expectation_X <- alpha + 2*beta + 5*gamma
+variance_X <- alpha + 4*beta + 25*gamma - (alpha + 2*beta + 5*gamma)^2
+
+cat("Sample mean:", my_sample_mean, "   Expectation:", expectation_X, "\nSample variance:", my_sample_variance, "  Population variance:", variance_X)
+```
+
+Here we can see that the sample mean is close to the expectation and that the sample variance is close to the population variance. This is as we would expect, since the sample size $n$ is large. As $n$ increases, we would see a convergence of the sample mean and sample variance towards the population mean and population variance.
+
+
+(h) We shall now conduct a simulation study to explore the behaviour of the sample mean.
+```{r}
+num_trials <- 10000
+set.seed(23)
+simulation_sample_X_0125 <- data.frame(trial=seq(num_trials)) %>%
+  mutate(sample=map(.x=trial, .f=~sample_X_0125(alpha,beta,gamma,n=100))) %>%
+  mutate(sample_mean=map_dbl(.x=sample, .f=~mean(.x)))
+```
+
+(i) We shall now generate a histogram plot which displays the behaviour of the sample mean within our simulation study.
+```{r}
+ggplot(simulation_sample_X_0125,aes(x=sample_mean)) + geom_histogram(binwidth=0.02) + labs(x="Sample mean",y="Count") + theme_bw()
+```
+
+From this histogram we can see that the sample means from our simulation study follow a Gaussian distribution with mean around $2$.
+
+
+(j) We shall now calculate the numerical value of $\mathbb{E}(\bar{X})$ and $\mathrm{Var}(\bar{X})$ from our simulation study.
+```{r}
+sample_expectation_X_bar <- round(mean(pull(simulation_sample_X_0125,sample_mean)), digits=4)
+sample_variance_X_bar <- round(var(pull(simulation_sample_X_0125,sample_mean)), digits=4)
+expectation_X_bar <- alpha + 2*beta + 5*gamma
+variance_X_bar <- (alpha + 4*beta + 25*gamma - (alpha + 2*beta + 5*gamma)^2)/100
+
+cat("Expectation of X bar:   Numerical value:", sample_expectation_X_bar, "   True value:", expectation_X_bar, "\nVariance of X bar:      Numerical value:", sample_variance_X_bar, "   True value:", variance_X_bar)
+```
+We can see that the numerical values of $\mathbb{E}(\bar{X})$ and $\mathrm{Var}(\bar{X})$ are close to the true values calculated in  parts (d) and (e). As previously described, this is as we would expect, since the number of trials `num_trials <- 10000` is large. As `num_trials` increases, the numerical values will converge towards their true values, $\mathbb{E}(\bar{X})=2$ and $\mathrm{Var}(\bar{X})=0.044$.
+
+(k) Let $f_{\mu,\sigma}:\mathbb{R}\to[0,\infty)$ be the probability density function of a Gaussian random variable with distribution $\mathcal{N}(\mu,\sigma^2)$. Consider the case when the population mean is $\mu=\mathbb{E}(\bar{X})=2$ and the population variance is $\sigma^2=\mathrm{Var}(\bar{X})=0.044$.  
+We shall now plot a rescaled version of this distribution, a curve of the form $x\mapsto200\cdot f_{\mu,\sigma}(x)$, which we will overlay on our histogram plot from part (i).
+```{r}
+gaussian_density_df <- data.frame(x=seq(expectation_X_bar-4*sqrt(variance_X_bar),expectation_X_bar+4*sqrt(variance_X_bar),0.0001)) %>%
+  mutate(density=map_dbl(.x=x,.f=~200*dnorm(.x,mean=expectation_X_bar,sd=sqrt(variance_X_bar))))
+
+ggplot(simulation_sample_X_0125) + geom_histogram(aes(x=sample_mean),fill="grey",binwidth=0.02) + labs(x="Sample mean / x",y=TeX("Count   /   Rescaled density $200 \\cdot f_{\\mu,\\sigma}(x)$")) + theme_bw() + geom_line(data=gaussian_density_df,aes(x=x,y=density),colour="blue")
+```
+
+(l) From the above graph, we can see that the shape of the histogram is closely defined by the rescaled density function curve. This confirms that the sample means from our simulation study follow a Gaussian distribution, with mean $\mathbb{E}(\bar{X})=2$ and variance $\mathrm{Var}(\bar{X})=0.044$.  
+We used a bin width of $0.02$ for the histogram. This results in bars of width $0.02$, where the height of each bar corresponds to the number of times the sample mean took on a value within the corresponding bin. Since our simulation study consisted of $10000$ trials, then the probability density function must be scaled up by a value of $10000\times0.02=200$ in order for the scale to match.
+
+
+## B.3
+
+Consider an exponential random variable $X$ with parameter $\lambda$. Then $X$ is a continuous random variable with density function $p_\lambda:\mathbb{R}\to(0,\infty)$ defined by
+
+\[
+p_\lambda(x) := 
+\begin{cases}
+0&\text{if $x<0$}\\
+\lambda e^{-\lambda x}&\text{if $x\ge0$}\\
+\end{cases}
+\]
+
+
+(a) We use integration by parts to calculate the population mean and variance of $X$.  
+The population mean of $X$ is 
+$$\begin{equation}
+\begin{aligned}
+\mathbb{E}(X) &= \int^\infty_{-\infty}x\cdot p_\lambda(x)dx \\
+&= \lambda\int^\infty_{0}xe^{-\lambda x}dx \\
+&= \lambda\left[-\tfrac{x}{\lambda}e^{-\lambda x}\Big|^\infty_0 + \int^\infty_{0}\tfrac{1}{\lambda}e^{-\lambda x}dx\right] \\
+&= -xe^{-\lambda x}\Big|^\infty_0 + \int^\infty_{0}e^{-\lambda x}dx \\
+&= \int^\infty_{0}e^{-\lambda x}dx \\
+&= -\tfrac{1}{\lambda}e^{-\lambda x}\Big|^\infty_0 \\
+&= \dfrac{1}{\lambda}
+\end{aligned}
+\end{equation}$$
+The population variance of $X$ is
+$$\begin{equation}
+\begin{aligned}
+\mathrm{Var}(X) &= \mathbb{E}(X^2) - \mathbb{E}(X)^2 \\
+&= \int^\infty_{-\infty}x^2\cdot p_\lambda(x)dx - \dfrac{1}{\lambda^2} \\
+&= \lambda\int^\infty_{0}x^2e^{-\lambda x}dx - \dfrac{1}{\lambda^2} \\
+&= \lambda \left[ -\tfrac{x^2}{\lambda}e^{-\lambda x}\Big|^\infty_0 + \int^\infty_{0}\tfrac{2x}{\lambda}e^{-\lambda x}dx \right] - \dfrac{1}{\lambda^2} \\
+&= -x^2e^{-\lambda x}\Big|^\infty_0 + \int^\infty_{0}2xe^{-\lambda x}dx - \dfrac{1}{\lambda^2} \\
+&= 2\int^\infty_{0}xe^{-\lambda x}dx - \dfrac{1}{\lambda^2} \\
+&= 2\cdot\dfrac{1}{\lambda^2}-\dfrac{1}{\lambda^2} \\
+&= \dfrac{1}{\lambda^2}
+\end{aligned}
+\end{equation}$$
+
+(b) We shall calculate the cumulative distribution function of $X$.  
+The distribution function $F_X:\mathbb{R}\to[0,1]$ satisfies $F_X(x) = \mathbb{P}(X\le x) = \int^x_{-\infty}p_\lambda(z)dz$.  
+So in the case when $x<0$, we have $F_X(x)=0$.  
+And in the case when $x\ge0$, we have
+$$\begin{equation}
+\begin{aligned}
+F_X(x) = \mathbb{P}(X\le x) &= \int^x_{-\infty}p_\lambda(z)dz \\
+&= \int^x_0\lambda e^{-\lambda z}dz \\
+&= -e^{-\lambda z}\Big|^x_0 \\
+&= 1-e^{-\lambda x}
+\end{aligned}
+\end{equation}$$
+Hence we have
+\[
+F_X(x) = 
+\begin{cases}
+0&\text{if $x<0$}\\
+1-e^{-\lambda x}&\text{if $x\ge0$}\\
+\end{cases}
+\]
+We shall also calculate the quantile function for $X$.  
+The quantile function $F_X^{-1}:[0,1]\to\mathbb{R}$ is defined by $F_X^{-1}(p) = \mathrm{inf}\{x\in\mathbb{R}:F_X(x)\ge p\}$.  
+So in the case when $p=0$ we have $F_X^{-1}(p)=-\infty$.  
+And in the case when $p\ge0$, we have
+$$\begin{equation}
+\begin{aligned}
+F_X^{-1}(p) &= \mathrm{inf}\{x\in\mathbb{R}:F_X(x)\ge p\} \\
+&= \mathrm{inf}\{x\in\mathbb{R}:1-e^{-\lambda x}\ge p\} \\
+&= \mathrm{inf}\{x\in\mathbb{R}:-\lambda x\le \mathrm{ln}(1-p)\} \\
+&= \mathrm{inf}\{x\in\mathbb{R}:x\ge-\tfrac{\mathrm{ln}(1-p)}{\lambda}\} \\
+&= -\dfrac{\mathrm{ln}(1-p)}{\lambda}
+\end{aligned}
+\end{equation}$$
+Hence we have
+\[
+F_X^{-1}(p) = 
+\begin{cases}
+-\infty&\text{if $p=0$}\\
+-\dfrac{\mathrm{ln}(1-p)}{\lambda}&\text{if $p>0$}\\
+\end{cases}
+\]
+
+(c) Suppose that $X_1,...,X_n$ is an i.i.d. sample from the exponential distribution with an unknown parameter $\lambda_0>0$. We shall calculate the maximum likelihood estimate $\hat\lambda_{MLE}$ for $\lambda_0$.  
+We first calculate the likelihood function
+$$\begin{equation}
+\begin{aligned}
+\ell(\lambda) &= \prod^n_{i=1}p_\lambda(X_i) \\
+&= \prod^n_{i=1}\lambda e^{-\lambda X_i} \\
+&= \lambda^ne^{-\lambda\sum^n_{i=1}X_i} \\
+&= \lambda^ne^{-\lambda n\bar{X}}
+\end{aligned}
+\end{equation}$$
+We then take the log of the likelihood function
+$$\mathrm{ln}(\ell(\lambda))=n\cdot\mathrm{ln}(\lambda)-\lambda n\bar{X}$$
+Next we calculate the derivative of the log-likelihood function
+$$\frac{\partial}{\partial\lambda}\mathrm{ln}(\ell(\lambda)) = \frac{n}{\lambda}-n\bar{X}$$
+We find the MLE by setting $\frac{\partial}{\partial\lambda}\mathrm{ln}(\ell(\lambda))=0$. By rearranging we obtain $$\hat\lambda_{MLE}=\frac{1}{\bar{X}}$$
+
+(d) We shall now conduct a simulation study to explore the behaviour of the maximum likelihood estimator $\hat\lambda_{MLE}$ for $\lambda_0$. We shall generate 100 random samples $X_1,...,X_n$ using the exponential distribution for sample sizes $n=5,10,15,...,1000$, so that we can calculate the mean squared error. We will then display the mean squared error as a function of the sample size.
+```{r}
+lambda_0 <- 0.01
+set.seed(23)
+exp_dist_simulation <- crossing(sample_size=seq(5,1000,5),trial=seq(100)) %>%
+  mutate(sample=map(.x=sample_size,.f=~rexp(.x,rate=lambda_0))) %>%
+  mutate(mle=map_dbl(.x=sample,.f=~1/mean(.x))) %>%
+  group_by(sample_size) %>%
+  summarise(mse=mean((mle-lambda_0)^2))
+
+ggplot(exp_dist_simulation,aes(x=sample_size,y=mse)) + geom_line() + labs(x="Sample Size",y="Mean Squared Error") + theme_bw()
+```
+
+We can see that the mean squared error is very small and that it converges towards $0$ as the sample size increases. This confirms that $\hat\lambda_{MLE}$ is a good estimator for $\lambda_0$.
+
+(e) We shall now import a csv containing synthetic data on arrival times for birds at a bird feeder, collected over a five week period. We shall model the sequence of differences in arrival times $X=(X_1,...,X_2)$ as independent and identically distributed exponential random variables.
+```{r}
+bird_times <- read.csv("bird_data_EMATM0061.csv")
+# Compute vector of arrival time differences
+bird_time_diffs <- bird_times %>% mutate(time_diffs=lead(Time)-Time)
+time_diffs <- bird_time_diffs %>% pull(time_diffs) %>% na.omit()
+# Compute the maximum likelihood estimate of the rate parameter
+mle <- 1/mean(time_diffs)
+cat("The MLE of the rate paramter is",mle)
+```
+
+(f) We would now like to give a confidence interval for $\lambda_0$ with a confidence level of $95\%$.  
+As $X=(X_1,...,X_2)$ has an exponential distribution rather than a Gaussian distribution, we cannot use the Student's t distribution to work out the confidence interval. Instead we pursue a different method.   
+
+We shall show that $Y=2\lambda X$ has a chi-squared distribution with degree of freedom 2.  
+Since $X\sim\mathrm{Exp}(\lambda)$ then the density function for $X$ is $p_\lambda(x)=\lambda e^{-\lambda x}$ if $x\ge0$ and $0$ otherwise.  
+Therefore the density function for $Y$ is $f_Y(y)=\tfrac{1}{2}e^{-\tfrac{1}{2}y}$ if $y\ge0$ and $0$ otherwise.  
+Hence $Y\sim \mathrm{Exp}(\tfrac{1}{2})$.  
+Furthermore, suppose $Z\sim\chi^2(2)$. Then $Z$ has density function $$g_Z(z)=\frac{z^{2/2-1}e^{-z/2}}{2^{2/2}\Gamma(2/2)} = \frac{e^{-z/2}}{2}$$ for $z\ge0$ and $0$ otherwise.  
+But this is exactly the same distribution as $Y$. Therefore $Y\sim \chi^2(2)$.  
+
+Now consider $\sum^n_{i=1}Y_i=2\lambda\sum^n_{i=1}X_i$.  
+Since each $Y_i\sim\chi^2(2)$ and each $Y_i$ is independent, then by the additive property of independent chi-squares, we have that $\sum^n_{i=1}Y_i=2\lambda\sum^n_{i=1}X_i\sim\chi^2(2n)$.  
+Write $\chi^2_{2n}(\alpha/2)$ and $\chi^2_{2n}(1-\alpha/2)$ as the $(\alpha/2)\times100$-th and $(1-\alpha/2)\times100$-th percentiles for the $\chi^2$ distribution with $2n$ degrees of freedom, respectively. Then $$\mathbb{P}(\chi^2_{2n}(\alpha/2)\le2\lambda\sum^n_{i=1}X_i\le\chi^2_{2n}(1-\alpha/2))=1-\alpha.$$  
+Therefore we have $$\mathbb{P}(\frac{\chi^2_{2n}(\alpha/2)}{2\sum^n_{i=1}X_i}\le\lambda\le\frac{\chi^2_{2n}(1-\alpha/2)}{2\sum^n_{i=1}X_i})=1-\alpha.$$  
+So the $1-\alpha$ confidence interval is $$\left[\frac{\chi^2_{2n}(\alpha/2)}{2\sum^n_{i=1}X_i},\frac{\chi^2_{2n}(1-\alpha/2)}{2\sum^n_{i=1}X_i}\right].$$  
+We are now ready to compute the confidence interval for $\lambda_0$ with a confidence level of $95\%$.
+```{r}
+alpha <- 0.05
+df <- 2*length(time_diffs)
+lower_ci <- qchisq(alpha/2,df=df)/(2*sum(time_diffs))
+upper_ci <- qchisq(1-(alpha/2),df=df)/(2*sum(time_diffs))
+cat("[",lower_ci,",",upper_ci,"]")
+```
+
+We can see that the maximum likelihood estimate $\hat\lambda_{MLE}$ falls within this confidence interval, $\hat\lambda_{MLE}=0.004982387\in[0.004903134,0.005062266]$.
